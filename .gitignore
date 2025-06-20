@@ -15,3 +15,12 @@ env/
 # OS files
 .DS_Store
 Thumbs.db
+
+*.log
+logs/
+temp/
+*.tmp
+test*.wav
+test*.mp3
+cookies.txt
+main_*backup*
