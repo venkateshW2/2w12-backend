@@ -1,26 +1,46 @@
-# Virtual Environment
-venv/
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
 env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Temporary files
+/tmp/
+*.tmp
+*.log
+
+# Environment variables
 .env
+*.env
+
+# Audio files (don't backup test files)
+*.wav
+*.mp3
+*.flac
+*.m4a
+
+# Database files
+*.db
+*.sqlite
 
 # IDE files
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # OS files
 .DS_Store
 Thumbs.db
 
-*.log
-logs/
-temp/
-*.tmp
-test*.wav
-test*.mp3
+# Large files
+*.zip
+*.tar.gz
 cookies.txt
-main_*backup*
+*.txt

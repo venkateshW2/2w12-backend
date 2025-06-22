@@ -1,4 +1,4 @@
-# models/responses.py
+# models/responses.py - Enhanced with new fields
 
 from pydantic import BaseModel
 from typing import Optional, Dict, List, Any
@@ -12,7 +12,7 @@ class HealthResponse(BaseModel):
     features: List[str]
 
 class BasicAudioResponse(BaseModel):
-    """Basic audio analysis response"""
+    """Enhanced basic audio analysis response"""
     filename: str
     duration: float
     tempo: float
@@ -22,9 +22,12 @@ class BasicAudioResponse(BaseModel):
     zero_crossing_rate: float
     sample_rate: int
     status: str
+    # NEW: Enhanced fields (optional for backward compatibility)
+    tempo_analysis: Optional[Dict[str, Any]] = None
+    scale_analysis: Optional[Dict[str, Any]] = None
 
 class AdvancedAudioResponse(BaseModel):
-    """Advanced audio analysis response"""
+    """Enhanced advanced audio analysis response"""
     filename: str
     key_detection: Dict[str, Any]
     tempo_analysis: Dict[str, Any] 
@@ -32,6 +35,9 @@ class AdvancedAudioResponse(BaseModel):
     duration: float
     sample_rate: int
     status: str
+    # NEW: Enhanced fields
+    mfcc_features: Optional[Dict[str, Any]] = None
+    transient_markers: Optional[List[Dict[str, Any]]] = None
 
 class GenreResponse(BaseModel):
     """Genre classification response"""
@@ -76,3 +82,18 @@ class BatchResponse(BaseModel):
     failed: int
     results: List[Dict[str, Any]]
     batch_statistics: Optional[Dict[str, Any]] = None
+
+# NEW: Enhanced responses for new endpoints
+class TransientResponse(BaseModel):
+    """Transient timeline response"""
+    filename: str
+    status: str
+    file_info: Dict[str, Any]
+    transient_markers: List[Dict[str, Any]]
+    total_transients: int
+
+class MemoryStatusResponse(BaseModel):
+    """Memory usage response"""
+    rss_mb: float
+    vms_mb: float
+    percent: float

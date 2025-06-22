@@ -1,4 +1,4 @@
-# core/audio_analyzer.py - Clean, properly structured version
+# core/audio_analyzer.py - Enhanced version preserving all existing features
 import librosa
 import numpy as np
 from typing import Dict, Any, Tuple, List, Optional
@@ -14,11 +14,12 @@ class AudioAnalyzer:
     
     def __init__(self, sample_rate: int = 44100):
         self.sample_rate = sample_rate
-        # Memory management settings
+        # NEW: Memory management settings
         self.max_file_size = 150 * 1024 * 1024  # 150MB limit
         self.max_duration = 600  # 10 minutes
         self.chunk_duration = 30  # Analyze first 30 seconds for long files
     
+    # NEW: Memory management methods
     def validate_file(self, file_path: str) -> Dict[str, Any]:
         """Validate audio file before processing"""
         try:
@@ -95,6 +96,7 @@ class AudioAnalyzer:
             "percent": process.memory_percent()
         }
     
+    # NEW: Enhanced tempo detection with multiple algorithms
     def multi_algorithm_tempo_detection(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
         """5-method tempo detection with consensus"""
         try:
@@ -163,8 +165,12 @@ class AudioAnalyzer:
                 "fallback": True
             }
     
+   
+    # Fixed transient detection method for core/audio_analyzer.py
+    # Replace the existing extract_transient_timeline method with this:
+
     def extract_transient_timeline(self, y: np.ndarray, sr: int) -> List[Dict[str, Any]]:
-        """Extract transient markers as a list for UI"""
+        """Extract transient markers as a list for UI - FIXED VERSION"""
         try:
             # Onset detection
             onsets = librosa.onset.onset_detect(y=y, sr=sr, units='time')
@@ -221,10 +227,12 @@ class AudioAnalyzer:
                     })
             
             return transient_markers
+            
         except Exception as e:
             print(f"Transient detection error: {e}")
             return []
     
+    # NEW: MFCC analysis method
     def extract_mfcc_features(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
         """Extract MFCC features for timbre analysis"""
         try:
@@ -263,6 +271,7 @@ class AudioAnalyzer:
         except Exception as e:
             return {"error": str(e)}
     
+    # NEW: Scale detection method
     def detect_musical_scale(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
         """Detect musical scale (major/minor/modes)"""
         try:
@@ -332,10 +341,12 @@ class AudioAnalyzer:
                 "error": str(e)
             }
     
+    # EXISTING: Keep original load_audio method for compatibility
     def load_audio(self, file_path: str) -> Tuple[np.ndarray, int]:
         """Load audio file with librosa"""
         return librosa.load(file_path, sr=self.sample_rate)
     
+    # ENHANCED: Updated basic_analysis with enhanced tempo
     def basic_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
         """Basic audio analysis - key, tempo, features with enhancements"""
         # Enhanced tempo detection
@@ -361,45 +372,122 @@ class AudioAnalyzer:
             "sample_rate": sr
         }
     
-    def advanced_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
-        """Advanced analysis using existing working methods"""
-        try:
-            # Use existing working methods
-            basic_result = self.basic_analysis(y, sr)
-            
-            # Enhanced tempo if available
-            tempo_analysis = self.multi_algorithm_tempo_detection(y, sr)
-            
-            # MFCC if available
-            mfcc_features = self.extract_mfcc_features(y, sr)
-            
-            # Transients if available
-            transient_markers = self.extract_transient_timeline(y, sr)
-            
-            # Basic spectral features
-            spectral_bandwidth = np.mean(librosa.feature.spectral_bandwidth(y=y, sr=sr))
-            spectral_contrast = np.mean(librosa.feature.spectral_contrast(y=y, sr=sr))
-            spectral_rolloff = np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr))
-            
-            return {
-                "duration": len(y) / sr,
-                "sample_rate": sr,
-                "tempo_analysis": tempo_analysis,
-                "key_analysis": basic_result.get("scale_analysis", {"key": basic_result.get("key")}),
-                "key_detection": basic_result.get("scale_analysis", {"key": basic_result.get("key")}),  # ADD THIS LINE
-                "spectral_features": {
-                    "bandwidth": round(float(spectral_bandwidth), 2),
-                    "contrast": round(float(spectral_contrast), 2),
-                    "rolloff": round(float(spectral_rolloff), 2)
-                },
-                "mfcc_features": mfcc_features,
-                "transient_markers": transient_markers,
-                "status": "success"
-            }
-            
-        except Exception as e:
-            return {"error": str(e), "status": "failed"}
+   # Enhanced advanced_analysis method with better error handling
+# Update your existing advanced_analysis method:
+
+# Replace your advanced_analysis method in core/audio_analyzer.py with this safer version:
+
+def advanced_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
+    """Advanced multi-algorithm analysis with comprehensive error handling"""
     
+    # Start with basic result structure
+    result = {
+        "duration": len(y) / sr,
+        "sample_rate": sr
+    }
+    
+    try:
+        # Key detection (existing code)
+        chroma = librosa.feature.chroma_stft(y=y, sr=sr)
+        key_profile_chroma = np.mean(chroma, axis=1)
+        key_index_chroma = np.argmax(key_profile_chroma)
+        
+        y_harmonic, _ = librosa.effects.hpss(y)
+        chroma_harmonic = librosa.feature.chroma_stft(y=y_harmonic, sr=sr)
+        key_profile_harmonic = np.mean(chroma_harmonic, axis=1)
+        key_index_harmonic = np.argmax(key_profile_harmonic)
+        
+        cqt = np.abs(librosa.cqt(y, sr=sr))
+        chroma_cqt = librosa.feature.chroma_cqt(C=cqt, sr=sr)
+        key_profile_cqt = np.mean(chroma_cqt, axis=1)
+        key_index_cqt = np.argmax(key_profile_cqt)
+        
+        keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+        
+        # Consensus
+        key_votes = [key_index_chroma, key_index_harmonic, key_index_cqt]
+        most_common_key = Counter(key_votes).most_common(1)[0][0]
+        consensus_strength = Counter(key_votes).most_common(1)[0][1] / 3
+        
+        result["key_detection"] = {
+            "consensus_key": keys[most_common_key],
+            "consensus_strength": round(float(consensus_strength), 3),
+            "methods": {
+                "chroma": {"key": keys[key_index_chroma], "confidence": round(float(np.max(key_profile_chroma) / np.sum(key_profile_chroma)), 3)},
+                "harmonic": {"key": keys[key_index_harmonic], "confidence": round(float(np.max(key_profile_harmonic) / np.sum(key_profile_harmonic)), 3)},
+                "cqt": {"key": keys[key_index_cqt], "confidence": round(float(np.max(key_profile_cqt) / np.sum(key_profile_cqt)), 3)}
+            }
+        }
+        
+    except Exception as e:
+        print(f"Key detection failed: {e}")
+        result["key_detection"] = {"error": "Key detection failed"}
+    
+    try:
+        # Enhanced tempo
+        if hasattr(self, 'multi_algorithm_tempo_detection'):
+            tempo_analysis = self.multi_algorithm_tempo_detection(y, sr)
+        else:
+            # Fallback to basic tempo
+            tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+            tempo_analysis = {"tempo": round(float(tempo), 1), "confidence": 0.5}
+        
+        beats = librosa.beat.beat_track(y=y, sr=sr)[1]
+        tempo_stability = np.std(np.diff(librosa.frames_to_time(beats, sr=sr))) if len(beats) > 1 else 0.0
+        
+        result["tempo_analysis"] = {
+            **tempo_analysis,
+            "stability": round(float(tempo_stability), 3),
+            "beat_count": len(beats)
+        }
+        
+    except Exception as e:
+        print(f"Tempo analysis failed: {e}")
+        result["tempo_analysis"] = {"error": "Tempo analysis failed"}
+    
+    try:
+        # Spectral features
+        spectral_bandwidth = np.mean(librosa.feature.spectral_bandwidth(y=y, sr=sr))
+        spectral_contrast = np.mean(librosa.feature.spectral_contrast(y=y, sr=sr))
+        spectral_rolloff = np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr))
+        
+        result["spectral_features"] = {
+            "bandwidth": round(float(spectral_bandwidth), 2),
+            "contrast": round(float(spectral_contrast), 2),
+            "rolloff": round(float(spectral_rolloff), 2)
+        }
+        
+    except Exception as e:
+        print(f"Spectral features failed: {e}")
+        result["spectral_features"] = {"error": "Spectral analysis failed"}
+    
+    try:
+        # MFCC features (safe)
+        if hasattr(self, 'extract_mfcc_features'):
+            mfcc_features = self.extract_mfcc_features(y, sr)
+            result["mfcc_features"] = mfcc_features
+        else:
+            result["mfcc_features"] = {"error": "MFCC method not available"}
+            
+    except Exception as e:
+        print(f"MFCC extraction failed: {e}")
+        result["mfcc_features"] = {"error": "MFCC extraction failed"}
+    
+    try:
+        # Transient markers (safe)
+        if hasattr(self, 'extract_transient_timeline'):
+            transient_markers = self.extract_transient_timeline(y, sr)
+            result["transient_markers"] = transient_markers
+        else:
+            result["transient_markers"] = []
+            
+    except Exception as e:
+        print(f"Transient detection failed: {e}")
+        result["transient_markers"] = []
+    
+    return result
+
+    # EXISTING: Keep your classify_genre method
     def classify_genre(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
         """Basic genre classification"""
         tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
@@ -431,7 +519,126 @@ class AudioAnalyzer:
                 "rms_energy": round(float(rms_energy), 4)
             }
         }
+    # Add this method to your AudioAnalyzer class in core/audio_analyzer.py
+
+    def professional_loudness_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
+        """Professional loudness analysis with EBU R128 compliance"""
+        
+        try:
+            import pyloudnorm as pyln
+            
+            # Ensure stereo for loudness measurement
+            if y.ndim == 1:
+                y_stereo = np.stack([y, y], axis=-1)
+            else:
+                y_stereo = y
+            
+            # Create loudness meter
+            meter = pyln.Meter(sr)
+            
+            # Integrated loudness (LUFS)
+            loudness_lufs = meter.integrated_loudness(y_stereo)
+            
+            # Peak measurement
+            peak_db = 20 * np.log10(np.max(np.abs(y))) if np.max(np.abs(y)) > 0 else -np.inf
+            
+            # RMS analysis
+            rms_db = 20 * np.log10(np.sqrt(np.mean(y**2))) if np.sqrt(np.mean(y**2)) > 0 else -np.inf
+            
+            # Dynamic range estimation
+            dynamic_range = peak_db - rms_db
+            
+            # Recommendations
+            recommendations = []
+            if loudness_lufs < -23:
+                recommendations.append("Audio is quieter than broadcast standard (-23 LUFS)")
+            elif loudness_lufs > -14:
+                recommendations.append("Audio is louder than streaming standard (-14 LUFS)")
+            
+            if peak_db > -1:
+                recommendations.append("Peak levels too high - risk of clipping")
+            
+            if dynamic_range < 6:
+                recommendations.append("Low dynamic range - heavily compressed")
+            elif dynamic_range > 20:
+                recommendations.append("High dynamic range - good dynamics")
+            
+            # Add mastering recommendations
+            if -16 <= loudness_lufs <= -12:
+                recommendations.append("Perfect for streaming platforms (Spotify, Apple Music)")
+            if -23.5 <= loudness_lufs <= -22.5:
+                recommendations.append("Compliant with broadcast standards (EBU R128)")
+            
+            return {
+                "lufs_integrated": round(float(loudness_lufs), 2) if not np.isnan(loudness_lufs) else None,
+                "peak_dbfs": round(float(peak_db), 2),
+                "rms_db": round(float(rms_db), 2),
+                "dynamic_range_db": round(float(dynamic_range), 2),
+                "recommendations": recommendations,
+                "ebu_r128_compliant": -23.5 <= loudness_lufs <= -22.5 if not np.isnan(loudness_lufs) else False,
+                "streaming_optimized": -16 <= loudness_lufs <= -12 if not np.isnan(loudness_lufs) else False,
+                "broadcast_ready": -23.5 <= loudness_lufs <= -22.5 if not np.isnan(loudness_lufs) else False,
+                "mastering_quality": "professional" if dynamic_range > 12 else ("good" if dynamic_range > 8 else "heavily_compressed")
+            }
+            
+        except Exception as e:
+            return {
+                "lufs_integrated": None,
+                "peak_dbfs": None,
+                "rms_db": None,
+                "dynamic_range_db": None,
+                "error": str(e),
+                "recommendations": ["Loudness analysis failed - ensure pyloudnorm is installed"]
+            }    
+    # Add this simpler loudness method to your AudioAnalyzer class:
+
+def simple_loudness_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
+    """Simple loudness analysis without pyloudnorm dependency"""
     
+    try:
+        # Peak measurement
+        peak_db = 20 * np.log10(np.max(np.abs(y))) if np.max(np.abs(y)) > 0 else -np.inf
+        
+        # RMS analysis
+        rms_value = np.sqrt(np.mean(y**2))
+        rms_db = 20 * np.log10(rms_value) if rms_value > 0 else -np.inf
+        
+        # Dynamic range estimation
+        dynamic_range = peak_db - rms_db
+        
+        # Simple LUFS estimation (approximate)
+        # This is a rough approximation, not true LUFS
+        lufs_estimate = rms_db - 23  # Rough conversion
+        
+        # Recommendations based on simple analysis
+        recommendations = []
+        if peak_db > -1:
+            recommendations.append("Peak levels too high - risk of clipping")
+        if dynamic_range < 6:
+            recommendations.append("Low dynamic range - heavily compressed")
+        elif dynamic_range > 20:
+            recommendations.append("High dynamic range - good dynamics")
+        
+        if rms_db > -12:
+            recommendations.append("Very loud - may cause listener fatigue")
+        elif rms_db < -30:
+            recommendations.append("Very quiet - may need normalization")
+        
+        return {
+            "peak_dbfs": round(float(peak_db), 2),
+            "rms_db": round(float(rms_db), 2),
+            "dynamic_range_db": round(float(dynamic_range), 2),
+            "lufs_estimate": round(float(lufs_estimate), 2),
+            "recommendations": recommendations,
+            "analysis_type": "simple",
+            "note": "Simplified analysis - install pyloudnorm for professional LUFS measurement"
+        }
+        
+    except Exception as e:
+        return {
+            "error": str(e),
+            "analysis_type": "failed"
+        }
     def professional_loudness_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
         """Simple loudness analysis"""
         try:
@@ -463,3 +670,137 @@ class AudioAnalyzer:
             }
         except Exception as e:
             return {"error": str(e)}
+
+    def advanced_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
+        """Advanced analysis using existing working methods"""
+        try:
+            # Use your existing working methods
+            basic_result = self.basic_analysis(y, sr)
+            
+            # Add enhanced tempo if available
+            if hasattr(self, 'multi_algorithm_tempo_detection'):
+                tempo_analysis = self.multi_algorithm_tempo_detection(y, sr)
+            else:
+                tempo_analysis = {"tempo": basic_result.get("tempo", 0)}
+            
+            # Add MFCC if available  
+            mfcc_features = {}
+            if hasattr(self, 'extract_mfcc_features'):
+                try:
+                    mfcc_features = self.extract_mfcc_features(y, sr)
+                except:
+                    mfcc_features = {"error": "MFCC extraction failed"}
+            
+            # Add transients if available
+            transient_markers = []
+            if hasattr(self, 'extract_transient_timeline'):
+                try:
+                    transient_markers = self.extract_transient_timeline(y, sr)
+                except:
+                    pass
+            
+            # Basic spectral features
+            spectral_bandwidth = np.mean(librosa.feature.spectral_bandwidth(y=y, sr=sr))
+            spectral_contrast = np.mean(librosa.feature.spectral_contrast(y=y, sr=sr))
+            spectral_rolloff = np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr))
+            
+            return {
+                "duration": len(y) / sr,
+                "sample_rate": sr,
+                "tempo_analysis": tempo_analysis,
+                "key_analysis": basic_result.get("scale_analysis", {"key": basic_result.get("key")}),
+                "spectral_features": {
+                    "bandwidth": round(float(spectral_bandwidth), 2),
+                    "contrast": round(float(spectral_contrast), 2),
+                    "rolloff": round(float(spectral_rolloff), 2)
+                },
+                "mfcc_features": mfcc_features,
+                "transient_markers": transient_markers,
+                "status": "success"
+            }
+            
+        except Exception as e:
+            return {"error": str(e), "status": "failed"}
+
+    def professional_loudness_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
+        """Simple loudness analysis"""
+        try:
+            # Peak measurement
+            peak_db = 20 * np.log10(np.max(np.abs(y))) if np.max(np.abs(y)) > 0 else -np.inf
+            
+            # RMS analysis
+            rms_value = np.sqrt(np.mean(y**2))
+            rms_db = 20 * np.log10(rms_value) if rms_value > 0 else -np.inf
+            
+            # Dynamic range
+            dynamic_range = peak_db - rms_db
+            
+            # Simple recommendations
+            recommendations = []
+            if peak_db > -1:
+                recommendations.append("Peak levels too high - risk of clipping")
+            if dynamic_range < 6:
+                recommendations.append("Low dynamic range - heavily compressed")
+            elif dynamic_range > 20:
+                recommendations.append("High dynamic range - good dynamics")
+            
+            return {
+                "peak_dbfs": round(float(peak_db), 2),
+                "rms_db": round(float(rms_db), 2),
+                "dynamic_range_db": round(float(dynamic_range), 2),
+                "recommendations": recommendations,
+                "analysis_type": "simple_working"
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    def advanced_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
+        """Advanced analysis using existing working methods"""
+        try:
+            # Use your existing working methods
+            basic_result = self.basic_analysis(y, sr)
+            
+            # Add enhanced tempo if available
+            if hasattr(self, 'multi_algorithm_tempo_detection'):
+                tempo_analysis = self.multi_algorithm_tempo_detection(y, sr)
+            else:
+                tempo_analysis = {"tempo": basic_result.get("tempo", 0)}
+            
+            # Add MFCC if available  
+            mfcc_features = {}
+            if hasattr(self, 'extract_mfcc_features'):
+                try:
+                    mfcc_features = self.extract_mfcc_features(y, sr)
+                except:
+                    mfcc_features = {"error": "MFCC extraction failed"}
+            
+            # Add transients if available
+            transient_markers = []
+            if hasattr(self, 'extract_transient_timeline'):
+                try:
+                    transient_markers = self.extract_transient_timeline(y, sr)
+                except:
+                    pass
+            
+            # Basic spectral features
+            spectral_bandwidth = np.mean(librosa.feature.spectral_bandwidth(y=y, sr=sr))
+            spectral_contrast = np.mean(librosa.feature.spectral_contrast(y=y, sr=sr))
+            spectral_rolloff = np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr))
+            
+            return {
+                "duration": len(y) / sr,
+                "sample_rate": sr,
+                "tempo_analysis": tempo_analysis,
+                "key_analysis": basic_result.get("scale_analysis", {"key": basic_result.get("key")}),
+                "spectral_features": {
+                    "bandwidth": round(float(spectral_bandwidth), 2),
+                    "contrast": round(float(spectral_contrast), 2),
+                    "rolloff": round(float(spectral_rolloff), 2)
+                },
+                "mfcc_features": mfcc_features,
+                "transient_markers": transient_markers,
+                "status": "success"
+            }
+            
+        except Exception as e:
+            return {"error": str(e), "status": "failed"}
