@@ -45,20 +45,3 @@ if __name__ == "__main__":
         port=settings.PORT,
         log_level="info"
     )
-# Import new routers
-from api.visualization import router as visualization_router
-#from api.streaming import router as streaming_router
-
-# Add routers to app
-app.include_router(visualization_router)
-#app.include_router(streaming_router)
-
-# Add startup event for file manager
-@app.on_event("startup")
-async def startup_event():
-    logger.info("Starting 2W12 Audio Analysis Backend with Visualization")
-    logger.info("File manager initialized")
-    
-@app.on_event("shutdown") 
-async def shutdown_event():
-    logger.info("Shutting down backend")
