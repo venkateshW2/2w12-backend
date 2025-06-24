@@ -16,20 +16,20 @@ logger = logging.getLogger(__name__)
 
 class AudioFileManager:
     def __init__(self, 
-                 temp_dir: str = "/tmp/audio",
-                 max_storage: int = 2_000_000_000,  # 2GB
-                 cleanup_threshold: int = 1_800_000_000):  # 1.8GB
-        
-        self.temp_dir = Path(temp_dir)
-        self.max_storage = max_storage
-        self.cleanup_threshold = cleanup_threshold
-        self.files: Dict[str, dict] = {}
-        self._cleanup_task = None
-        
-        # Create temp directory if it doesn't exist
-        self.temp_dir.mkdir(exist_ok=True, parents=True)
-        
-        logger.info(f"AudioFileManager initialized: {self.temp_dir}")
+             temp_dir: str = "/tmp/audio",
+             max_storage: int = 2_000_000_000,  # 2GB
+             cleanup_threshold: int = 1_800_000_000):  # 1.8GB
+            self.temp_dir = Path(temp_dir)
+            self.max_storage = max_storage
+            self.cleanup_threshold = cleanup_threshold
+            self.files: Dict[str, dict] = {}
+            self._cleanup_task = None
+            
+            # Create temp directory if it doesn't exist
+            self.temp_dir.mkdir(exist_ok=True, parents=True)
+            
+            logger.info(f"AudioFileManager initialized: {self.temp_dir}")
+            # REMOVED: Background task creation
     
     async def start_background_cleanup(self):
         """Start background cleanup task (call this after event loop is running)"""
@@ -107,13 +107,26 @@ class AudioFileManager:
         del self.files[file_id]
         
         logger.info(f"Removed file {file_id}")
-    
+
+    # Add this method to your AudioFileManager class
+    async def set_compressed_path(self, file_id: str, compressed_path: str):
+        """Update file info with compressed version"""
+        if file_id in self.files:
+            self.files[file_id]["compressed_path"] = compressed_path
+            if os.path.exists(compressed_path):
+                self.files[file_id]["compressed_size"] = os.path.getsize(compressed_path)
+            self.files[file_id]["status"] = "ready"
+            logger.info(f"Set compressed path for {file_id}: {compressed_path}")
+        
     async def get_storage_usage(self) -> int:
-        """Calculate current storage usage"""
+
         total_size = 0
         for file_info in self.files.values():
             total_size += file_info.get("original_size", 0)
-            total_size += file_info.get("compressed_size", 0)
+            # FIX: Handle None values
+            compressed_size = file_info.get("compressed_size")
+            if compressed_size is not None:
+                total_size += compressed_size
         return total_size
     
     async def cleanup_expired_files(self):

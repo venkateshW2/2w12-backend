@@ -1,11 +1,14 @@
 """
-Visualization API endpoints
-Handles audio analysis with visualization data generation
+Visualization API endpoints - FIXED VERSION
 """
 
 import asyncio
 import logging
 import time
+import os
+import librosa
+import uuid  # ADD THIS
+import numpy as np
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks
@@ -14,7 +17,7 @@ from fastapi.responses import JSONResponse
 from core.file_manager import file_manager
 from core.audio_compressor import audio_compressor
 from core.visualization_generator import visualization_generator
-from core.audio_analyzer import AudioAnalyzer  # Your existing analyzer
+from core.audio_analyzer import AudioAnalyzer  
 from models.visualization_models import (
     CompleteAnalysisResponse, 
     FileStatusResponse
@@ -27,124 +30,114 @@ logger = logging.getLogger(__name__)
 # Initialize your existing audio analyzer
 audio_analyzer = AudioAnalyzer()
 
-@router.post("/analyze-complete", response_model=CompleteAnalysisResponse)
+@router.post("/analyze-complete")  # REMOVE response_model temporarily
 async def analyze_with_visualization(
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = None
 ):
-    """
-    Complete audio analysis with visualization data generation
-    Combines your existing analysis pipeline with new visualization features
-    """
+    """Complete audio analysis with visualization data generation"""
     
     start_time = time.time()
+    file_id = str(uuid.uuid4())
     
     try:
         # Validate file
         if not file.filename:
             raise HTTPException(status_code=400, detail="No filename provided")
         
-        # Check file size (150MB limit)
+        # Read file content
         file_content = await file.read()
+        
+        # Check file size (50MB limit for now, increase later)
         if len(file_content) > 150 * 1024 * 1024:
-            raise HTTPException(status_code=413, detail="File too large (max 150MB)")
+            raise HTTPException(status_code=400, detail="File too large. Max 150MB for now.")
         
-        # Store original file
-        file_id = await file_manager.store_file(
-            file_id=f"upload_{int(time.time())}_{file.filename}",
-            file_content=file_content,
-            original_filename=file.filename
-        )
+        logger.info(f"Processing file: {file.filename} ({len(file_content)} bytes)")
         
-        logger.info(f"Processing file {file_id}: {len(file_content)/1024/1024:.1f}MB")
+        # Store file
+        file_path = await file_manager.store_file(file_id, file_content, file.filename)
+        # Comment out this line for now - method might not exist
+        # await file_manager.update_file_status(file_id, "processing")
         
-        # Get file path
-        file_info = await file_manager.get_file_info(file_id)
-        if not file_info:
-            raise HTTPException(status_code=500, detail="Failed to store file")
-        
-        original_path = file_info["original_path"]
-        
-        # Load audio for analysis
-        import librosa
-        y, sr = librosa.load(original_path, sr=None)
-        
-        # Run your existing analysis pipeline
-        logger.info("Running audio analysis...")
-        analysis_results = {}
-        
-        # Basic analysis
-        basic_analysis = audio_analyzer.analyze_basic(y, sr)
-        analysis_results.update(basic_analysis)
-        
-        # Advanced analysis
         try:
-            advanced_analysis = audio_analyzer.analyze_advanced(y, sr)
-            analysis_results.update(advanced_analysis)
+            # Get analysis from AudioAnalyzer (keeping the efficient approach)
+            logger.info("Running comprehensive analysis with pre-computed features...") 
+            result = audio_analyzer.comprehensive_analysis_with_features(file_path)
+            analysis_result = result["analysis"]
+            features = result["audio_features"]
+            
+            # Extract audio data for modules
+            y = np.array(features["y"])
+            sr = features["sr"]
+            
+            logger.info(f"Got analysis + features: {features['samples']} samples at {sr}Hz")
+            
+            # USE YOUR PROFESSIONAL VISUALIZATION GENERATOR
+            logger.info("Generating visualization using VisualizationGenerator...")
+            visualization_data = await visualization_generator.generate_visualization_data(
+                audio_path=file_path,
+                y=y,
+                sr=sr
+            )
+            logger.info("Visualization generated using professional module")
+            
+            # USE YOUR AUDIO COMPRESSOR
+            logger.info("Compressing audio using AudioCompressor...")
+            
+            # Generate compressed file path
+            file_ext = os.path.splitext(file_path)[1].lower()
+            compressed_path = file_path.replace(file_ext, '.mp3')
+            
+            # Get optimal compression settings based on file size
+            file_size = os.path.getsize(file_path)
+            duration = features["duration"]
+            compression_settings = audio_compressor.get_compression_settings(file_size, duration)
+            
+            # Compress using your professional compressor
+            compression_success = await audio_compressor.compress_audio(
+                input_path=file_path,
+                output_path=compressed_path,
+                target_bitrate=compression_settings["bitrate"],
+                target_sample_rate=int(compression_settings["sample_rate"])
+            )
+            
+            if compression_success:
+                await file_manager.set_compressed_path(file_id, compressed_path)
+                compressed_size = os.path.getsize(compressed_path)
+                format_type = "mp3"
+                logger.info(f"Audio compressed successfully to {compressed_size/1024/1024:.1f}MB")
+            else:
+                logger.warning("Audio compression failed, will serve original file")
+                compressed_size = file_size
+                format_type = "original"
+            
+            # Calculate processing time
+            processing_time = time.time() - start_time
+            
+            # Return comprehensive response
+            return {
+                "analysis": analysis_result,
+                "visualization": visualization_data,  # From professional VisualizationGenerator
+                "playback": {
+                    "file_id": file_id,
+                    "stream_url": f"/api/streaming/audio/{file_id}",
+                    "compressed_size": compressed_size,
+                    "original_size": file_size,
+                    "compression_ratio": round((1 - compressed_size / file_size) * 100, 1) if compression_success else 0,
+                    "format": format_type
+                },
+                "processing_time": round(processing_time, 2)
+            }
+            
         except Exception as e:
-            logger.warning(f"Advanced analysis failed: {e}")
-        
-        # Genre classification
-        try:
-            genre_result = audio_analyzer.classify_genre(y, sr)
-            analysis_results["genre"] = genre_result
-        except Exception as e:
-            logger.warning(f"Genre classification failed: {e}")
-        
-        # Mood detection
-        try:
-            mood_result = audio_analyzer.detect_mood(y, sr)
-            analysis_results["mood"] = mood_result
-        except Exception as e:
-            logger.warning(f"Mood detection failed: {e}")
-        
-        # Generate visualization data
-        logger.info("Generating visualization data...")
-        visualization_data = await visualization_generator.generate_visualization_data(
-            original_path, y, sr
-        )
-        
-        # Compress audio for playback
-        logger.info("Compressing audio for playback...")
-        compressed_path = original_path.replace("_original", "_compressed").replace(
-            original_path.split('.')[-1], "mp3"
-        )
-        
-        compression_success = await audio_compressor.compress_audio(
-            original_path, compressed_path
-        )
-        
-        if compression_success:
-            await file_manager.set_compressed_path(file_id, compressed_path)
-        else:
-            logger.warning("Audio compression failed, will serve original file")
-            compressed_path = original_path
-        
-        # Calculate processing time
-        processing_time = time.time() - start_time
-        
-        # Prepare response
-        response = CompleteAnalysisResponse(
-            analysis=analysis_results,
-            visualization=visualization_data,
-            playback={
-                "file_id": file_id,
-                "stream_url": f"/api/streaming/audio/{file_id}",
-                "compressed_size": os.path.getsize(compressed_path) if os.path.exists(compressed_path) else 0,
-                "format": "mp3" if compression_success else "original",
-                "expires_at": datetime.now() + timedelta(minutes=30)
-            },
-            processing_time=round(processing_time, 2)
-        )
-        
-        logger.info(f"Analysis complete for {file_id} in {processing_time:.1f}s")
-        return response
-        
-    except HTTPException:
-        raise
+            await file_manager.update_file_status(file_id, "error", error_message=str(e))
+            raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
     except Exception as e:
-        logger.error(f"Error in analyze_with_visualization: {e}")
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        logger.error(f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+# Keep the other endpoints as they are - they look good
 
 @router.get("/status/{file_id}", response_model=FileStatusResponse)
 async def get_file_status(file_id: str):

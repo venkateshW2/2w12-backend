@@ -1,32 +1,49 @@
-# main.py (NEW MODULAR VERSION)
+# Imports first
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from config.settings import get_settings
 from api import health, audio
+from api.streaming import router as streaming_router  # This import works now
 import uvicorn
 
-# Initialize FastAPI
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Create FastAPI app
 app = FastAPI(
     title="2W12.ONE Audio Analysis Platform",
     description="Professional audio analysis with modular architecture",
     version="3.0.0"
 )
 
-# Load settings
-settings = get_settings()
-
-# Setup CORS
+# Add middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include API routers
+# Include routers AFTER app is created
 app.include_router(health.router)
 app.include_router(audio.router, prefix="/api/audio", tags=["Audio Analysis"])
+
+# Include visualization router
+try:
+    from api.visualization import router as visualization_router
+    app.include_router(visualization_router)
+    logger.info("✅ Visualization router imported successfully!")
+except Exception as e:
+    logger.error(f"❌ Failed to import visualization router: {e}")
+
+# Include streaming router
+app.include_router(streaming_router)  # This should work now
+logger.info("✅ Streaming router included successfully!")
 
 # Root endpoint
 @app.get("/")
@@ -39,26 +56,4 @@ async def root():
     }
 
 if __name__ == "__main__":
-    uvicorn.run(
-        app,
-        host=settings.HOST,
-        port=settings.PORT,
-        log_level="info"
-    )
-# Import new routers
-from api.visualization import router as visualization_router
-#from api.streaming import router as streaming_router
-
-# Add routers to app
-app.include_router(visualization_router)
-#app.include_router(streaming_router)
-
-# Add startup event for file manager
-@app.on_event("startup")
-async def startup_event():
-    logger.info("Starting 2W12 Audio Analysis Backend with Visualization")
-    logger.info("File manager initialized")
-    
-@app.on_event("shutdown") 
-async def shutdown_event():
-    logger.info("Shutting down backend")
+    uvicorn.run(app, host="0.0.0.0", port=8001, log_level="info")

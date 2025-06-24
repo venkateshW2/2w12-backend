@@ -6,6 +6,7 @@ Handles compressed audio file streaming with range request support
 import logging
 from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import StreamingResponse
+from datetime import timedelta
 
 from core.file_manager import file_manager
 from core.streaming_handler import streaming_handler

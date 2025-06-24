@@ -463,3 +463,41 @@ class AudioAnalyzer:
             }
         except Exception as e:
             return {"error": str(e)}
+    # Add this NEW method to your AudioAnalyzer
+    # In AudioAnalyzer
+    def comprehensive_analysis_with_features(self, file_path):
+        """
+        Complete analysis + pre-computed audio features for visualization
+        Does expensive computations ONCE
+        """
+        # Load audio ONCE
+        y, sr = librosa.load(file_path, sr=None)
+        
+        # Get comprehensive analysis using existing method
+        analysis = self.basic_analysis(y, sr)
+        
+        # Do expensive STFT computation ONCE
+        stft = librosa.stft(y, n_fft=2048, hop_length=512)
+        magnitude = np.abs(stft)
+        magnitude_db = librosa.amplitude_to_db(magnitude, ref=np.max)
+        
+        # Pre-compute frequency and time axes
+        frequencies = librosa.fft_frequencies(sr=sr, n_fft=2048)
+        time_frames = librosa.frames_to_time(np.arange(stft.shape[1]), sr=sr, hop_length=512)
+        
+        return {
+                "analysis": analysis,
+                "audio_features": {
+                    # For waveform generation
+                    "y": y.tolist(),
+                    "sr": int(sr),
+                    "duration": float(len(y) / sr),
+                    "samples": int(len(y)),
+                    
+                    # Pre-computed spectrogram data (expensive computation done ONCE)
+                    "stft_magnitude_db": magnitude_db.tolist(),
+                    "frequencies": frequencies.tolist(),
+                    "time_frames": time_frames.tolist(),
+                    "stft_shape": list(magnitude_db.shape)
+                }
+            }

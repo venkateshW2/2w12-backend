@@ -6,6 +6,22 @@ from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 
+class CompleteAnalysisResponse(BaseModel):
+    analysis: Dict[str, Any]
+    visualization: Dict[str, Any]
+    playback: Dict[str, Any]
+    processing_time: float
+
+class FileStatusResponse(BaseModel):
+    file_id: str
+    status: str
+    created: datetime
+    last_accessed: datetime
+    expires_at: datetime
+    original_size: int
+    compressed_size: Optional[int] = None
+    error_message: Optional[str] = None
+    
 class WaveformData(BaseModel):
     data: List[float]
     time: List[float]
