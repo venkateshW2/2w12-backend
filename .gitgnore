@@ -1,0 +1,26 @@
+# Environment files
+*.env
+environment.yml
+.env*
+
+# Audio files
+*.wav
+*.mp3
+*.mp4
+*.avi
+*.flac
+*.aac
+*.ogg
+
+# Temporary audio folders
+temp_audio/
+audio_temp/
+**/temp_audio/
+
+# Other common excludes
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.DS_Store
+node_modules/

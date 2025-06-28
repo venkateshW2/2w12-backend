@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+ 2w12-backend:
+   build:
+     context: .
+     dockerfile: Dockerfile
+   container_name: 2w12-audio-server
+   ports:
+     - "0.0.0.0:8001:8001"
+   volumes:
+     - .:/app
+     - ./uploads:/app/uploads
+     - ./temp:/app/temp
+     - ./logs:/app/logs
+     - ./static:/app/static
+   environment:
+     - PYTHONPATH=/app
+     - HOST=0.0.0.0
+     - PORT=8001
+     - UPLOAD_DIR=/app/uploads
+     - TEMP_DIR=/app/temp
+     - LOG_DIR=/app/logs
+     - STATIC_DIR=/app/static
+     - NVIDIA_VISIBLE_DEVICES=all
+     - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+   restart: always
+   networks:
+     - 2w12-network
+   # GPU ACCELERATION ENABLED!
+   deploy:
+     resources:
+       reservations:
+         devices:
+           - driver: nvidia
+             count: all
+             capabilities: [gpu]
+
+ redis:
+   image: redis:7-alpine
+   container_name: 2w12-redis
+   ports:
+     - "0.0.0.0:6379:6379"
+   volumes:
+     - redis_data:/data
+   restart: always
+   networks:
+     - 2w12-network
+   command: redis-server --appendonly yes --maxmemory 4gb --maxmemory-policy allkeys-lru
+   mem_limit: 4g
+
+ portainer:
+   image: portainer/portainer-ce:latest
+   container_name: portainer
+   restart: always
+   ports:
+     - "0.0.0.0:9000:9000"
+   volumes:
+     - /var/run/docker.sock:/var/run/docker.sock
+     - portainer_data:/data
+   networks:
+     - 2w12-network
+
+networks:
+ 2w12-network:
+   driver: bridge
+
+volumes:
+ portainer_data:
+ redis_data:

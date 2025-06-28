@@ -1,0 +1,231 @@
+# NEW FILE: core/database_manager.py
+import redis
+import json
+import hashlib
+import time
+import logging
+from typing import Dict, Any, Optional, List
+
+logger = logging.getLogger(__name__)
+
+class SoundToolsDatabase:
+    """
+    Redis-based caching and data management for 2W12 Sound Tools
+    Handles analysis caching, research data, and performance tracking
+    """
+    
+    def __init__(self):
+        self.redis_client = redis.Redis(
+            host='redis',  # Docker service name
+            port=6379,
+            db=0,
+            decode_responses=True,
+            socket_connect_timeout=5,
+            socket_timeout=5
+        )
+        
+        # Test connection on startup
+        self._test_connection()
+        
+    def _test_connection(self):
+        """Test Redis connection and log status"""
+        try:
+            self.redis_client.ping()
+            logger.info("✅ Redis connection successful")
+            
+            # Initialize stats if not exist
+            if not self.redis_client.exists("stats:cache_hits"):
+                self.redis_client.set("stats:cache_hits", 0)
+                self.redis_client.set("stats:cache_misses", 0)
+                self.redis_client.set("stats:cache_stores", 0)
+                logger.info("🆕 Initialized cache statistics")
+                
+        except Exception as e:
+            logger.error(f"❌ Redis connection failed: {e}")
+            raise ConnectionError(f"Cannot connect to Redis: {e}")
+    
+    def create_file_fingerprint(self, file_content: bytes, filename: str) -> str:
+        """
+        Create unique fingerprint for file caching
+        Uses content sample + metadata for reliable identification
+        """
+        # Use first 8KB + filename + size for fingerprint
+        content_sample = file_content[:8192]
+        file_info = f"{filename}_{len(file_content)}"
+        fingerprint_data = content_sample + file_info.encode()
+        
+        return hashlib.md5(fingerprint_data).hexdigest()
+    
+    def cache_analysis_result(self, fingerprint: str, analysis_data: Dict, ttl: int = 604800) -> bool:
+        """
+        Cache analysis results for fast retrieval
+        
+        Args:
+            fingerprint: Unique file identifier
+            analysis_data: Complete analysis results
+            ttl: Time to live in seconds (default: 7 days)
+        
+        Returns:
+            bool: True if cached successfully
+        """
+        try:
+            cache_key = f"analysis:{fingerprint}"
+            
+            # Add caching metadata
+            cache_data = {
+                **analysis_data,
+                "cached_at": time.time(),
+                "fingerprint": fingerprint,
+                "cache_version": "v1.0"
+            }
+            
+            # Store with expiration
+            success = self.redis_client.setex(
+                cache_key,
+                ttl,
+                json.dumps(cache_data, default=str)
+            )
+            
+            if success:
+                self.redis_client.incr("stats:cache_stores")
+                logger.info(f"✅ Cached analysis for {fingerprint[:8]}... (TTL: {ttl}s)")
+                return True
+            else:
+                logger.error(f"❌ Failed to cache analysis for {fingerprint[:8]}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Cache store failed for {fingerprint[:8]}: {e}")
+            return False
+    
+    def get_cached_analysis(self, fingerprint: str) -> Optional[Dict]:
+        """
+        Retrieve cached analysis results
+        
+        Args:
+            fingerprint: Unique file identifier
+            
+        Returns:
+            Dict or None: Cached analysis data if found
+        """
+        try:
+            cache_key = f"analysis:{fingerprint}"
+            data = self.redis_client.get(cache_key)
+            
+            if data:
+                self.redis_client.incr("stats:cache_hits")
+                # Update TTL on access (extend by 1 day)
+                self.redis_client.expire(cache_key, 86400)
+                logger.info(f"✅ Cache HIT for {fingerprint[:8]}...")
+                return json.loads(data)
+            else:
+                self.redis_client.incr("stats:cache_misses")
+                logger.info(f"❌ Cache MISS for {fingerprint[:8]}...")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Cache retrieval failed for {fingerprint[:8]}: {e}")
+            self.redis_client.incr("stats:cache_misses")
+            return None
+    
+    def store_research_data(self, fingerprint: str, ml_data: Dict, validation_data: Dict = None) -> bool:
+        """
+        Store data for ML research and model improvement
+        (Used in Week 2 for MusicBrainz validation)
+        
+        Args:
+            fingerprint: File identifier
+            ml_data: ML analysis results
+            validation_data: Ground truth data for comparison
+        """
+        try:
+            research_key = f"research:{fingerprint}"
+            
+            research_record = {
+                "fingerprint": fingerprint,
+                "ml_analysis": ml_data,
+                "validation_data": validation_data,
+                "research_timestamp": time.time(),
+                "research_version": "v1.0"
+            }
+            
+            # Store research data with longer TTL (30 days)
+            success = self.redis_client.setex(
+                research_key,
+                2592000,  # 30 days
+                json.dumps(research_record, default=str)
+            )
+            
+            if success:
+                # Add to research queue for batch processing
+                self.redis_client.lpush("research_queue", fingerprint)
+                logger.info(f"🔬 Stored research data for {fingerprint[:8]}...")
+                return True
+            else:
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Research data storage failed: {e}")
+            return False
+    
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Get comprehensive cache performance statistics"""
+        try:
+            hits = int(self.redis_client.get("stats:cache_hits") or 0)
+            misses = int(self.redis_client.get("stats:cache_misses") or 0)
+            stores = int(self.redis_client.get("stats:cache_stores") or 0)
+            
+            total_requests = hits + misses
+            hit_rate = (hits / total_requests * 100) if total_requests > 0 else 0
+            
+            # Memory usage
+            memory_info = self.redis_client.info("memory")
+            memory_used_mb = memory_info.get("used_memory", 0) / 1024 / 1024
+            
+            # Key counts
+            analysis_keys = len(self.redis_client.keys("analysis:*"))
+            research_keys = len(self.redis_client.keys("research:*"))
+            
+            return {
+                "performance": {
+                    "cache_hits": hits,
+                    "cache_misses": misses,
+                    "cache_stores": stores,
+                    "hit_rate_percent": round(hit_rate, 2),
+                    "total_requests": total_requests
+                },
+                "storage": {
+                    "memory_used_mb": round(memory_used_mb, 2),
+                    "cached_analyses": analysis_keys,
+                    "research_records": research_keys
+                },
+                "status": "healthy" if hit_rate > 0 or total_requests == 0 else "needs_optimization"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Stats retrieval failed: {e}")
+            return {"error": str(e), "status": "error"}
+    
+    def cleanup_expired_data(self) -> Dict[str, int]:
+        """Manual cleanup of expired data (for maintenance)"""
+        try:
+            # This is automatically handled by Redis TTL, but we can force cleanup
+            deleted_analysis = 0
+            deleted_research = 0
+            
+            # Find and delete expired keys (Redis handles this automatically, but useful for stats)
+            for key in self.redis_client.scan_iter(match="analysis:*"):
+                ttl = self.redis_client.ttl(key)
+                if ttl == -1:  # No expiration set (shouldn't happen)
+                    self.redis_client.expire(key, 604800)  # Set 7-day expiration
+                    
+            logger.info("🧹 Cleanup completed")
+            return {
+                "deleted_analysis": deleted_analysis,
+                "deleted_research": deleted_research,
+                "status": "completed"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Cleanup failed: {e}")
+            return {"error": str(e), "status": "failed"}
