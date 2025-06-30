@@ -6,6 +6,7 @@ services:
      context: .
      dockerfile: Dockerfile
    container_name: 2w12-audio-server
+   runtime: nvidia 
    ports:
      - "0.0.0.0:8001:8001"
    volumes:
@@ -24,18 +25,10 @@ services:
      - STATIC_DIR=/app/static
      - NVIDIA_VISIBLE_DEVICES=all
      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+     - CUDA_VISIBLE_DEVICES=0
    restart: always
    networks:
      - 2w12-network
-   # GPU ACCELERATION ENABLED!
-   deploy:
-     resources:
-       reservations:
-         devices:
-           - driver: nvidia
-             count: all
-             capabilities: [gpu]
-
  redis:
    image: redis:7-alpine
    container_name: 2w12-redis
@@ -51,10 +44,10 @@ services:
 
  portainer:
    image: portainer/portainer-ce:latest
-   container_name: portainer
+   container_name: portainer1
    restart: always
    ports:
-     - "0.0.0.0:9000:9000"
+     - "0.0.0.0:9001:9000"
    volumes:
      - /var/run/docker.sock:/var/run/docker.sock
      - portainer_data:/data

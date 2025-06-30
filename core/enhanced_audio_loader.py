@@ -24,13 +24,60 @@ class EnhancedAudioLoader:
         self.db = SoundToolsDatabase()
         self.sample_rate = 22050  # Standard for consistency
         self.max_duration = 600   # 10 minutes max for now
+
+        # Initialize Essentia models
+        try:
+            from .essentia_models import EssentiaModelManager
+            self.essentia_models = EssentiaModelManager()
+            self.ml_models_loaded = self.essentia_models.models_loaded
+            logger.info(f"🤖 Essentia models: {self.ml_models_loaded}")
+        except Exception as e:
+            logger.warning(f"⚠️  Essentia models unavailable: {e}")
+            self.essentia_models = None
+            self.ml_models_loaded = False
+
+            # Analysis versions for tracking improvements
+            self.analysis_version = "v2.0_enhanced_librosa"
+            self.ml_models_loaded = False  # Will be True in Week 2
+            self.analysis_version = "v2.1_essentia_integrated"
+
+            logger.info("🚀 Enhanced Audio Loader initialized")
+            self._log_capabilities()
         
-        # Analysis versions for tracking improvements
-        self.analysis_version = "v2.0_enhanced_librosa"
-        self.ml_models_loaded = False  # Will be True in Week 2
+        # Initialize Madmom processor
+        try:
+            from .madmom_processor import MadmomProcessor
+            self.madmom_processor = MadmomProcessor()
+            self.madmom_loaded = self.madmom_processor.processors_loaded
+            logger.info(f"🥁 Madmom processors: {self.madmom_loaded}")
+        except Exception as e:
+            logger.warning(f"⚠️  Madmom processors unavailable: {e}")
+            self.madmom_processor = None
+            self.madmom_loaded = False
         
-        logger.info("🚀 Enhanced Audio Loader initialized")
-        self._log_capabilities()
+        # MusicBrainz researcher
+        try:
+            from .musicbrainz_utils import MusicBrainzResearcher
+            self.mb_researcher = MusicBrainzResearcher()
+            self.research_enabled = (
+                self.mb_researcher.acoustid_available and 
+                self.mb_researcher.musicbrainz_available
+            )
+            logger.info(f"🔬 MusicBrainz research: {self.research_enabled}")
+        except Exception as e:
+            logger.warning(f"⚠️  MusicBrainz research unavailable: {e}")
+            self.mb_researcher = None
+            self.research_enabled = False
+        
+        # Update analysis version
+        self.analysis_version = "v2.2_full_ml_pipeline"
+        
+        # Update ML models loaded status
+        self.ml_models_loaded = (
+            (self.essentia_models and self.essentia_models.models_loaded) or
+            (self.madmom_processor and self.madmom_processor.processors_loaded)
+        )
+
     
     def _log_capabilities(self):
         """Log current capabilities"""
@@ -62,6 +109,20 @@ class EnhancedAudioLoader:
         # Step 2: Check cache first
         cached_result = self.db.get_cached_analysis(fingerprint)
         if cached_result:
+            # Even for cache hits, we can trigger background research if not done yet
+            if self.research_enabled:
+                fingerprint = cached_result.get("fingerprint")
+                if fingerprint:
+                    # Check if research already done
+                    research_key = f"research:{fingerprint}"
+                    if not self.db.redis_client.exists(research_key):
+                        # Start background research (non-blocking)
+                        asyncio.create_task(
+                            self.mb_researcher.background_research(
+                                fingerprint, file_content, cached_result
+                            )
+                        )
+            # From Image 2: Return cache hit with timing
             total_time = time.time() - start_total
             logger.info(f"⚡ Cache HIT - returned in {total_time:.3f}s")
             return {
@@ -96,6 +157,21 @@ class EnhancedAudioLoader:
             cache_success = self.db.cache_analysis_result(fingerprint, final_result)
             final_result["cached"] = cache_success
             
+            if self.research_enabled:
+                fingerprint = final_result.get("fingerprint")
+                if fingerprint:
+                    # Start background research (does not block response)
+                    asyncio.create_task(
+                        self.mb_researcher.background_research(
+                            fingerprint, file_content, final_result
+                        )
+                    )
+                    final_result["background_research_started"] = True
+                else:
+                    final_result["background_research_started"] = False
+            
+            return final_result
+            
             logger.info(f"✅ Analysis completed in {analysis_time:.2f}s (total: {total_time:.2f}s)")
             return final_result
             
@@ -105,10 +181,8 @@ class EnhancedAudioLoader:
     
     def _perform_comprehensive_analysis(self, file_content: bytes, filename: str) -> Dict[str, Any]:
         """
-        Comprehensive analysis combining enhanced librosa + ML foundation
-        
-        Week 1: Enhanced librosa analysis
-        Week 2: Will add Essentia + Madmom integration here
+        Comprehensive analysis: Enhanced librosa + Essentia ML + Madmom rhythm
+
         """
         
         # Create temporary file for librosa
@@ -123,6 +197,12 @@ class EnhancedAudioLoader:
             # Core analysis pipeline
             core_analysis = self._librosa_enhanced_analysis(y, sr)
             
+            # Essentia ML analysis 
+            ml_analysis = self._essentia_ml_analysis(y, sr)
+
+            # Madmom rhythm analysis
+            rhythm_analysis = self._madmom_rhythm_analysis(tmp_file_path)
+
             # Combine all results
             comprehensive_result = {
                 "filename": filename,
@@ -131,10 +211,18 @@ class EnhancedAudioLoader:
                 # Core enhanced librosa analysis
                 **core_analysis,
                 
+                # Essentia ML analysis
+                **ml_analysis,
+
+                # Madmom rhythm analysis
+                 **rhythm_analysis,
+
                 # Analysis metadata
                 "features_extracted": list(core_analysis.keys()),
                 "analysis_pipeline": ["enhanced_librosa"],
-                "quality_score": self._calculate_analysis_quality(core_analysis)
+                "quality_score": self._calculate_analysis_quality({
+                **core_analysis, **ml_analysis, **rhythm_analysis
+                })
             }
             
             return comprehensive_result
@@ -483,3 +571,76 @@ class EnhancedAudioLoader:
             quality = 0.5
         
         return round(quality, 3)
+    
+    # Essentia ML analysis method:
+
+    def _essentia_ml_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
+    """Essentia ML-powered analysis"""
+    
+        if not self.essentia_models or not self.ml_models_loaded:
+            logger.info("🔄 Essentia models not available, skipping ML analysis")
+            return {
+                "ml_features_available": False,
+                "ml_status": "models_not_loaded"
+            }
+        
+        logger.info("🤖 Starting Essentia ML analysis")
+        
+        try:
+            # ML-based key detection
+            ml_key_analysis = self.essentia_models.analyze_key_ml(y, sr)
+            
+            # ML-based genre classification
+            ml_genre_analysis = self.essentia_models.analyze_genre_ml(y, sr)
+            
+            # Combine ML results
+            ml_results = {
+                **ml_key_analysis,
+                **ml_genre_analysis,
+                "ml_features_available": True,
+                "ml_status": "success",
+                "ml_model_count": len(self.essentia_models.available_models)
+            }
+            
+            logger.info("✅ Essentia ML analysis completed")
+            return ml_results
+            
+        except Exception as e:
+            logger.error(f"❌ Essentia ML analysis failed: {e}")
+            return {
+                "ml_features_available": False,
+                "ml_status": f"error: {str(e)}"
+            }
+        
+    # ADD: New Madmom rhythm analysis method:
+    def _madmom_rhythm_analysis(self, audio_file_path: str) -> Dict[str, Any]:
+        """Madmom-based rhythm analysis"""
+        
+        if not self.madmom_processor or not self.madmom_loaded:
+            logger.info("🔄 Madmom processors not available, skipping rhythm analysis")
+            return {
+                "madmom_features_available": False,
+                "madmom_status": "processors_not_loaded"
+            }
+        
+        logger.info("🥁 Starting Madmom rhythm analysis")
+        
+        try:
+            # Comprehensive rhythm analysis
+            rhythm_results = self.madmom_processor.comprehensive_rhythm_analysis(audio_file_path)
+            
+            # Add availability status
+            rhythm_results.update({
+                "madmom_features_available": True,
+                "madmom_status": "success"
+            })
+            
+            logger.info("✅ Madmom rhythm analysis completed")
+            return rhythm_results
+            
+        except Exception as e:
+            logger.error(f"❌ Madmom rhythm analysis failed: {e}")
+            return {
+                "madmom_features_available": False,
+                "madmom_status": f"error: {str(e)}"
+            }
