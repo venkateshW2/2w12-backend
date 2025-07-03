@@ -27,7 +27,11 @@ class EssentiaModelManager:
             "key_detection": "models/discogs-effnet-key.pb",
             "genre_classification": "models/discogs-effnet-genres.pb",
             "mood_detection": "models/mood_acoustic.pb",
-            "danceability": "models/danceability.pb"
+            "danceability": "models/danceability.pb",
+            "instrument_recognition": "models/instrument_recognition.pb",
+            "piano_detection": "models/piano_detection.pb",
+            "audio_quality": "models/audio_quality.pb",
+            "musicality": "models/musicality.pb"
         }
         
         self._load_available_models()
@@ -81,8 +85,7 @@ class EssentiaModelManager:
         
         try:
             # Prepare audio for Essentia
-            audio_vector = es.MonoLoader(filename="", sampleRate=sr)(y.astype(np.float32))
-            
+            audio_vector = y.astype(np.float32)
             # Extract features for key detection
             features = self.available_models["key_detection"](audio_vector)
             
@@ -127,7 +130,7 @@ class EssentiaModelManager:
         
         try:
             # Prepare audio for Essentia
-            audio_vector = es.MonoLoader(filename="", sampleRate=sr)(y.astype(np.float32))
+            audio_vector = y.astype(np.float32)
             
             # Extract genre features
             features = self.available_models["genre_classification"](audio_vector)

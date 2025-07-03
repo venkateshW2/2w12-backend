@@ -28,7 +28,7 @@ keras>=2.15.0
 
 # ML Libraries (only Essentia for now)
 essentia-tensorflow==2.1b6.dev1110
-# acoustid>=1.2.0
+pyacoustid>=1.3.0
 musicbrainzngs>=0.7.1
 
 # Utilities

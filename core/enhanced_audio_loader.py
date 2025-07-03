@@ -1,6 +1,7 @@
 # NEW FILE: core/enhanced_audio_loader.py
 import librosa
 import numpy as np
+import asyncio
 import time
 import logging
 import tempfile
@@ -24,7 +25,12 @@ class EnhancedAudioLoader:
         self.db = SoundToolsDatabase()
         self.sample_rate = 22050  # Standard for consistency
         self.max_duration = 600   # 10 minutes max for now
-
+        # Initialize capabilities flags
+        self.ml_models_loaded = False
+        self.madmom_loaded = False
+        self.research_enabled = False 
+        # Analysis version tracking
+        self.analysis_version = "v2.1_ml_integrated"
         # Initialize Essentia models
         try:
             from .essentia_models import EssentiaModelManager
@@ -35,15 +41,6 @@ class EnhancedAudioLoader:
             logger.warning(f"⚠️  Essentia models unavailable: {e}")
             self.essentia_models = None
             self.ml_models_loaded = False
-
-            # Analysis versions for tracking improvements
-            self.analysis_version = "v2.0_enhanced_librosa"
-            self.ml_models_loaded = False  # Will be True in Week 2
-            self.analysis_version = "v2.1_essentia_integrated"
-
-            logger.info("🚀 Enhanced Audio Loader initialized")
-            self._log_capabilities()
-        
         # Initialize Madmom processor
         try:
             from .madmom_processor import MadmomProcessor
@@ -68,7 +65,8 @@ class EnhancedAudioLoader:
             logger.warning(f"⚠️  MusicBrainz research unavailable: {e}")
             self.mb_researcher = None
             self.research_enabled = False
-        
+        logger.info("🚀 Enhanced Audio Loader initialized")
+        self._log_capabilities()
         # Update analysis version
         self.analysis_version = "v2.2_full_ml_pipeline"
         
@@ -575,15 +573,15 @@ class EnhancedAudioLoader:
     # Essentia ML analysis method:
 
     def _essentia_ml_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
-    """Essentia ML-powered analysis"""
+        """Essentia ML-powered analysis"""
     
         if not self.essentia_models or not self.ml_models_loaded:
             logger.info("🔄 Essentia models not available, skipping ML analysis")
             return {
-                "ml_features_available": False,
-                "ml_status": "models_not_loaded"
+                    "ml_features_available": False,
+                    "ml_status": "models_not_loaded"
             }
-        
+            
         logger.info("🤖 Starting Essentia ML analysis")
         
         try:

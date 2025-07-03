@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     pkg-config \
     cmake \
+    libchromaprint-dev \
+    libchromaprint1 \
+    libchromaprint-tools \
     libasound2-dev \
     libportaudio2 \
     libportaudiocpp0 \

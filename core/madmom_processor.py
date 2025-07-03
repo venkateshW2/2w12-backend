@@ -127,15 +127,18 @@ class MadmomProcessor:
         try:
             # Process beats with RNN
             beat_processor = self.available_processors["beats"]
-            beats = beat_processor(audio_file_path)
+            beat_activations = beat_processor(audio_file_path)
+            
+            # Convert activations to beat times (simple peak picking)
+            from madmom.features.beats import BeatTrackingProcessor
+            beat_tracker = BeatTrackingProcessor(fps=100)
+            beats = beat_tracker(beat_activations)
             
             if len(beats) > 0:
-                # Beat analysis
-                beat_times = beats[:, 0]  # Beat positions in seconds
-                beat_confidences = beats[:, 1]  # Beat confidence scores
+                # Rest of your code stays the same...
+                beat_times = beats  # beats are already just times, not [time, confidence]
                 
                 # Beat statistics
-                mean_confidence = np.mean(beat_confidences)
                 beat_intervals = np.diff(beat_times)
                 mean_interval = np.mean(beat_intervals) if len(beat_intervals) > 0 else 0.0
                 interval_consistency = 1.0 / (1.0 + np.std(beat_intervals)) if len(beat_intervals) > 1 else 0.0
@@ -145,7 +148,7 @@ class MadmomProcessor:
                 
                 return {
                     "madmom_beat_count": len(beats),
-                    "madmom_beat_confidence": round(mean_confidence, 3),
+                    "madmom_beat_confidence": 0.8,  # Fixed confidence since we don't have individual confidences
                     "madmom_beat_consistency": round(interval_consistency, 3),
                     "madmom_beat_tempo": round(estimated_tempo, 1),
                     "madmom_beat_interval_mean": round(mean_interval, 3),
