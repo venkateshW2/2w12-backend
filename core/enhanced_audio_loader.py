@@ -239,24 +239,19 @@ class EnhancedAudioLoader:
             logger.info("🚀 Starting parallel analysis pipeline...")
             parallel_start = time.time()
             
-            # Create async tasks for parallel execution
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            # Use ThreadPoolExecutor for parallel execution (no asyncio conflicts)
+            import concurrent.futures
             
-            try:
-                tasks = [
-                    loop.run_in_executor(None, self._librosa_enhanced_analysis, y, sr),
-                    loop.run_in_executor(None, self._essentia_ml_analysis, y, sr),
-                    loop.run_in_executor(None, self._madmom_rhythm_analysis, tmp_file_path)
-                ]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                # Submit all tasks to thread pool
+                future_core = executor.submit(self._librosa_enhanced_analysis, y, sr)
+                future_ml = executor.submit(self._essentia_ml_analysis, y, sr)
+                future_rhythm = executor.submit(self._madmom_rhythm_analysis, tmp_file_path)
                 
-                # Execute all analyses in parallel
-                core_analysis, ml_analysis, rhythm_analysis = loop.run_until_complete(
-                    asyncio.gather(*tasks)
-                )
-                
-            finally:
-                loop.close()
+                # Wait for all tasks to complete
+                core_analysis = future_core.result()
+                ml_analysis = future_ml.result()
+                rhythm_analysis = future_rhythm.result()
             
             parallel_time = time.time() - parallel_start
             logger.info(f"⚡ Parallel analysis completed in {parallel_time:.2f}s")
@@ -416,10 +411,15 @@ class EnhancedAudioLoader:
         return enhanced_result
     
     def _enhanced_key_detection(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
-        """Enhanced key detection with confidence and mode"""
+        """Fast key detection (lightweight since Essentia ML provides better results)"""
         try:
-            # Chromagram with better parameters
-            chromagram = librosa.feature.chroma_stft(y=y, sr=sr, hop_length=512, n_fft=2048)
+            # Fast chromagram with optimized parameters for speed
+            chromagram = librosa.feature.chroma_stft(
+                y=y, sr=sr, 
+                hop_length=2048,  # 4x larger hop (faster)
+                n_fft=1024,       # Smaller FFT (faster) 
+                norm=None         # Skip normalization (faster)
+            )
             
             # Mean chroma vector
             chroma_mean = np.mean(chromagram, axis=1)
@@ -476,22 +476,20 @@ class EnhancedAudioLoader:
             return {"key": "C", "mode": "major", "key_confidence": 0.5}
     
     def _enhanced_tempo_detection(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
-        """Multi-algorithm tempo detection with confidence"""
+        """Fast tempo detection (lightweight since Madmom provides better results)"""
         try:
-            # Method 1: Standard beat tracking
-            tempo1, beats1 = librosa.beat.beat_track(y=y, sr=sr)
+            # Fast single-method tempo detection 
+            tempo1, beats1 = librosa.beat.beat_track(
+                y=y, sr=sr,
+                hop_length=1024,  # Larger hop for speed
+                start_bpm=60,     # Constrain search range
+                max_tempo=200     # Constrain search range  
+            )
             tempo1 = float(tempo1)
             
-            # Method 2: Simple fallback
-            tempo2 = 120.0  # Skip complex tempo detection for now
-            
-            # Method 3: Harmonic/percussive separation
-            try:
-                y_harmonic, y_percussive = librosa.effects.hpss(y)
-                tempo3, beats3 = librosa.beat.beat_track(y=y_percussive, sr=sr)
-                tempo3 = float(tempo3)
-            except:
-                tempo3 = tempo1
+            # Skip expensive methods since we have Madmom
+            tempo2 = tempo1  # Use same result
+            tempo3 = tempo1  # Use same result
             
             # Collect tempo candidates
             tempo_candidates = [t for t in [tempo1, tempo2, tempo3] if 40 <= t <= 200]
@@ -763,28 +761,29 @@ class EnhancedAudioLoader:
         batch_size = 3  # Process 3 chunks simultaneously
         all_chunk_results = []
         
+        import concurrent.futures
+        
         for batch_start in range(0, len(chunks), batch_size):
             batch_chunks = chunks[batch_start:batch_start + batch_size]
             
-            # Process batch in parallel
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            try:
-                batch_tasks = []
+            # Process batch in parallel using ThreadPoolExecutor
+            with concurrent.futures.ThreadPoolExecutor(max_workers=batch_size * 2) as executor:
+                batch_futures = []
+                
                 for chunk in batch_chunks:
-                    tasks = [
-                        loop.run_in_executor(None, self._librosa_enhanced_analysis, chunk["audio"], sr),
-                        loop.run_in_executor(None, self._essentia_ml_analysis, chunk["audio"], sr),
-                        # Note: Madmom needs file path, so we'll process it separately
-                    ]
-                    batch_tasks.append(asyncio.gather(*tasks))
+                    # Submit librosa and essentia tasks for each chunk
+                    future_librosa = executor.submit(self._librosa_enhanced_analysis, chunk["audio"], sr)
+                    future_essentia = executor.submit(self._essentia_ml_analysis, chunk["audio"], sr)
+                    batch_futures.append((future_librosa, future_essentia))
                 
-                batch_results = loop.run_until_complete(asyncio.gather(*batch_tasks))
+                # Collect results for this batch
+                batch_results = []
+                for future_librosa, future_essentia in batch_futures:
+                    librosa_result = future_librosa.result()
+                    essentia_result = future_essentia.result()
+                    batch_results.append((librosa_result, essentia_result))
+                
                 all_chunk_results.extend(batch_results)
-                
-            finally:
-                loop.close()
             
             logger.info(f"✅ Processed batch {batch_start//batch_size + 1}/{(len(chunks) + batch_size - 1)//batch_size}")
         
