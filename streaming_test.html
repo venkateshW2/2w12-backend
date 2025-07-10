@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>2W12 Streaming Audio Analysis</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .upload-area { border: 2px dashed #ccc; padding: 40px; text-align: center; margin: 20px 0; }
+        .progress-container { margin: 20px 0; }
+        .progress-bar { width: 100%; height: 30px; background: #f0f0f0; border-radius: 15px; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #4CAF50, #45a049); transition: width 0.3s; }
+        .status { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .status.upload { background: #e3f2fd; }
+        .status.analyzing { background: #fff3e0; }
+        .status.complete { background: #e8f5e8; }
+        .status.error { background: #ffebee; }
+        .results { margin: 20px 0; padding: 20px; background: #f5f5f5; border-radius: 10px; }
+        .timeline { margin: 10px 0; }
+        .chunk { display: inline-block; width: 20px; height: 20px; margin: 2px; border-radius: 3px; background: #ddd; }
+        .chunk.processing { background: #ff9800; animation: pulse 1s infinite; }
+        .chunk.complete { background: #4CAF50; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    </style>
+</head>
+<body>
+    <h1>🎵 2W12 Streaming Audio Analysis</h1>
+    <p>Upload an audio file to see real-time analysis progress!</p>
+    
+    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+        <input type="file" id="fileInput" accept="audio/*" style="display: none;" onchange="startStreaming()">
+        <p>📁 Click to select audio file</p>
+        <small>Supports: MP3, WAV, FLAC, etc.</small>
+    </div>
+    
+    <div class="progress-container" id="progressContainer" style="display: none;">
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+        </div>
+        <div id="statusMessage" class="status">Ready...</div>
+        
+        <div class="timeline" id="timeline">
+            <strong>Processing Timeline:</strong><br>
+            <div id="chunks"></div>
+        </div>
+    </div>
+    
+    <div class="results" id="results" style="display: none;">
+        <h3>📊 Analysis Results</h3>
+        <div id="resultData"></div>
+    </div>
+
+    <script>
+        async function startStreaming() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) return;
+            
+            // Show progress container
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            
+            // Create timeline chunks based on file duration (estimate)
+            createTimeline(estimateChunks(file.size));
+            
+            // Create form data
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                // Start streaming request
+                const response = await fetch('/api/audio/analyze-streaming', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                updateProgress(data);
+                            } catch (e) {
+                                console.log('Parse error:', e);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                updateProgress({
+                    status: 'error',
+                    message: `Connection error: ${error.message}`,
+                    progress: 0
+                });
+            }
+        }
+        
+        function updateProgress(data) {
+            const progressFill = document.getElementById('progressFill');
+            const statusMessage = document.getElementById('statusMessage');
+            const results = document.getElementById('results');
+            const resultData = document.getElementById('resultData');
+            
+            // Update progress bar
+            if (data.progress !== undefined) {
+                progressFill.style.width = data.progress + '%';
+            }
+            
+            // Update status message
+            let className = 'status';
+            let message = '';
+            
+            switch (data.status) {
+                case 'upload_complete':
+                    className += ' upload';
+                    message = `✅ Uploaded: ${data.filename} (${data.size_mb} MB)`;
+                    break;
+                case 'loading_audio':
+                    className += ' analyzing';
+                    message = `🔄 ${data.message}`;
+                    break;
+                case 'analyzing':
+                    className += ' analyzing';
+                    message = `⚡ ${data.message}`;
+                    updateTimelineProgress(data.progress);
+                    break;
+                case 'complete':
+                    className += ' complete';
+                    message = `🎉 Analysis Complete!`;
+                    showResults(data.result);
+                    break;
+                case 'error':
+                    className += ' error';
+                    message = `❌ ${data.message}`;
+                    break;
+            }
+            
+            statusMessage.className = className;
+            statusMessage.textContent = message;
+        }
+        
+        function createTimeline(chunkCount) {
+            const chunksContainer = document.getElementById('chunks');
+            chunksContainer.innerHTML = '';
+            
+            for (let i = 0; i < chunkCount; i++) {
+                const chunk = document.createElement('div');
+                chunk.className = 'chunk';
+                chunk.id = `chunk-${i}`;
+                chunk.title = `Chunk ${i + 1}`;
+                chunksContainer.appendChild(chunk);
+            }
+        }
+        
+        function updateTimelineProgress(progress) {
+            const chunks = document.querySelectorAll('.chunk');
+            const activeChunkIndex = Math.floor((progress / 100) * chunks.length);
+            
+            chunks.forEach((chunk, index) => {
+                if (index < activeChunkIndex) {
+                    chunk.className = 'chunk complete';
+                } else if (index === activeChunkIndex) {
+                    chunk.className = 'chunk processing';
+                } else {
+                    chunk.className = 'chunk';
+                }
+            });
+        }
+        
+        function estimateChunks(fileSize) {
+            // Rough estimate: 1MB per 10 seconds, 120s chunks
+            const estimatedDuration = (fileSize / 1024 / 1024) * 10;
+            return Math.max(1, Math.ceil(estimatedDuration / 120));
+        }
+        
+        function showResults(result) {
+            const results = document.getElementById('results');
+            const resultData = document.getElementById('resultData');
+            
+            // Extract key metrics
+            const analysis = result.analysis || result;
+            const keyInfo = `${analysis.key || 'Unknown'} ${analysis.mode || ''}`;
+            const tempo = analysis.madmom_tempo || analysis.tempo || 'Unknown';
+            const duration = analysis.duration || 'Unknown';
+            const processingTime = analysis.analysis_time || analysis.total_time || 'Unknown';
+            
+            resultData.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div>
+                        <h4>🎼 Musical Analysis</h4>
+                        <p><strong>Key:</strong> ${keyInfo}</p>
+                        <p><strong>Tempo:</strong> ${tempo} BPM</p>
+                        <p><strong>Duration:</strong> ${duration}s</p>
+                    </div>
+                    <div>
+                        <h4>⚡ Performance</h4>
+                        <p><strong>Processing Time:</strong> ${processingTime}s</p>
+                        <p><strong>Pipeline:</strong> ${(analysis.analysis_pipeline || []).join(', ')}</p>
+                        <p><strong>GPU Batch:</strong> ${analysis.chunked_processing ? '✅ Enabled' : '❌ Disabled'}</p>
+                    </div>
+                </div>
+                <details style="margin-top: 20px;">
+                    <summary>📋 Full Analysis Data</summary>
+                    <pre style="background: #f0f0f0; padding: 10px; border-radius: 5px; overflow: auto; max-height: 300px;">${JSON.stringify(result, null, 2)}</pre>
+                </details>
+            `;
+            
+            results.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

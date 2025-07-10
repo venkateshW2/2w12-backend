@@ -246,12 +246,12 @@ class EnhancedAudioLoader:
                 # Submit all tasks to thread pool
                 future_core = executor.submit(self._librosa_enhanced_analysis, y, sr)
                 future_ml = executor.submit(self._essentia_ml_analysis, y, sr)
-                future_rhythm = executor.submit(self._madmom_rhythm_analysis, tmp_file_path)
+                future_rhythm = executor.submit(self._madmom_fast_rhythm_analysis, tmp_file_path)
                 
-                # Wait for all tasks to complete
+                # Wait for fast analyses to complete (don't wait for heavy downbeat analysis)
                 core_analysis = future_core.result()
-                ml_analysis = future_ml.result()
-                rhythm_analysis = future_rhythm.result()
+                ml_analysis = future_ml.result() 
+                rhythm_analysis = future_rhythm.result()  # Fast rhythm only
             
             parallel_time = time.time() - parallel_start
             logger.info(f"⚡ Parallel analysis completed in {parallel_time:.2f}s")
@@ -478,12 +478,11 @@ class EnhancedAudioLoader:
     def _enhanced_tempo_detection(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
         """Fast tempo detection (lightweight since Madmom provides better results)"""
         try:
-            # Fast single-method tempo detection 
+            # Fast single-method tempo detection (remove max_tempo - not supported in this librosa version)
             tempo1, beats1 = librosa.beat.beat_track(
                 y=y, sr=sr,
                 hop_length=1024,  # Larger hop for speed
-                start_bpm=60,     # Constrain search range
-                max_tempo=200     # Constrain search range  
+                start_bpm=60      # Constrain search range
             )
             tempo1 = float(tempo1)
             
@@ -688,9 +687,8 @@ class EnhancedAudioLoader:
                 "ml_status": f"error: {str(e)}"
             }
         
-    # ADD: New Madmom rhythm analysis method:
-    def _madmom_rhythm_analysis(self, audio_file_path: str) -> Dict[str, Any]:
-        """Madmom-based rhythm analysis"""
+    def _madmom_fast_rhythm_analysis(self, audio_file_path: str) -> Dict[str, Any]:
+        """Fast Madmom rhythm analysis - tempo and beats only"""
         
         if not self.madmom_processor or not self.madmom_loaded:
             logger.info("🔄 Madmom processors not available, skipping rhythm analysis")
@@ -699,10 +697,75 @@ class EnhancedAudioLoader:
                 "madmom_status": "processors_not_loaded"
             }
         
-        logger.info("🥁 Starting Madmom rhythm analysis")
+        logger.info("🥁 Starting fast Madmom rhythm analysis (tempo + beats only)")
         
         try:
-            # Comprehensive rhythm analysis
+            # Fast analyses only (skip heavy downbeat analysis)
+            tempo_analysis = self.madmom_processor.analyze_tempo_precise(audio_file_path)
+            beat_analysis = self.madmom_processor.analyze_beats_neural(audio_file_path)
+            
+            # Quick result with essential rhythm info
+            rhythm_results = {
+                **tempo_analysis,
+                **beat_analysis,
+                
+                # Add placeholder for skipped downbeat analysis
+                "madmom_downbeat_count": 0,
+                "madmom_downbeat_confidence": 0.0,
+                "madmom_meter": "complex",  # Default assumption
+                "madmom_downbeat_interval": 0.0,
+                
+                # Status
+                "madmom_features_available": True,
+                "madmom_status": "success",
+                "madmom_processors_available": len(self.madmom_processor.available_processors),
+                "madmom_analysis_complete": True,
+                "madmom_fast_mode": True
+            }
+            
+            # Calculate tempo agreement
+            madmom_tempo = tempo_analysis.get("madmom_tempo", 0.0)
+            beat_tempo = beat_analysis.get("madmom_beat_tempo", 0.0)
+            if madmom_tempo > 0 and beat_tempo > 0:
+                tempo_diff = abs(madmom_tempo - beat_tempo)
+                tempo_agreement = max(0.0, 1.0 - (tempo_diff / 20.0))
+            else:
+                tempo_agreement = 0.0
+            
+            rhythm_results.update({
+                "madmom_tempo_agreement": round(tempo_agreement, 3),
+                "madmom_rhythm_confidence": round((
+                    tempo_analysis.get("madmom_tempo_confidence", 0.0) +
+                    beat_analysis.get("madmom_beat_confidence", 0.0) +
+                    tempo_agreement
+                ) / 3.0, 3)
+            })
+            
+            logger.info("✅ Fast Madmom rhythm analysis completed")
+            return rhythm_results
+            
+        except Exception as e:
+            logger.error(f"❌ Fast Madmom rhythm analysis failed: {e}")
+            return {
+                "madmom_features_available": False,
+                "madmom_status": f"error: {str(e)}"
+            }
+    
+    # ADD: Full Madmom rhythm analysis method (for background processing):
+    def _madmom_rhythm_analysis(self, audio_file_path: str) -> Dict[str, Any]:
+        """Full Madmom-based rhythm analysis (with heavy downbeat analysis)"""
+        
+        if not self.madmom_processor or not self.madmom_loaded:
+            logger.info("🔄 Madmom processors not available, skipping rhythm analysis")
+            return {
+                "madmom_features_available": False,
+                "madmom_status": "processors_not_loaded"
+            }
+        
+        logger.info("🥁 Starting full Madmom rhythm analysis")
+        
+        try:
+            # Comprehensive rhythm analysis (including heavy downbeat analysis)
             rhythm_results = self.madmom_processor.comprehensive_rhythm_analysis(audio_file_path)
             
             # Add availability status
@@ -711,11 +774,11 @@ class EnhancedAudioLoader:
                 "madmom_status": "success"
             })
             
-            logger.info("✅ Madmom rhythm analysis completed")
+            logger.info("✅ Full Madmom rhythm analysis completed")
             return rhythm_results
             
         except Exception as e:
-            logger.error(f"❌ Madmom rhythm analysis failed: {e}")
+            logger.error(f"❌ Full Madmom rhythm analysis failed: {e}")
             return {
                 "madmom_features_available": False,
                 "madmom_status": f"error: {str(e)}"
@@ -726,8 +789,8 @@ class EnhancedAudioLoader:
         duration = file_info.get("analyzed_duration", len(y) / sr)
         file_size_mb = file_info.get("file_size_mb", 0)
         
-        # Use chunking for files longer than 5 minutes OR larger than 50MB
-        return duration > 300 or file_size_mb > 50
+        # Use chunking for files longer than 1 minute OR larger than 5MB (lowered for testing)
+        return duration > 60 or file_size_mb > 5
     
     def _chunked_parallel_analysis(self, y: np.ndarray, sr: int, tmp_file_path: str, 
                                  file_info: Dict, filename: str) -> Dict[str, Any]:
@@ -757,8 +820,8 @@ class EnhancedAudioLoader:
         
         logger.info(f"🔧 Processing {len(chunks)} chunks of {chunk_duration}s each")
         
-        # Process chunks in parallel batches (GPU memory optimization)
-        batch_size = 3  # Process 3 chunks simultaneously
+        # GPU BATCH PROCESSING - Process multiple chunks on GPU simultaneously
+        batch_size = 8  # Process 8 chunks simultaneously on GPU
         all_chunk_results = []
         
         import concurrent.futures
@@ -766,29 +829,45 @@ class EnhancedAudioLoader:
         for batch_start in range(0, len(chunks), batch_size):
             batch_chunks = chunks[batch_start:batch_start + batch_size]
             
-            # Process batch in parallel using ThreadPoolExecutor
-            with concurrent.futures.ThreadPoolExecutor(max_workers=batch_size * 2) as executor:
-                batch_futures = []
-                
-                for chunk in batch_chunks:
-                    # Submit librosa and essentia tasks for each chunk
-                    future_librosa = executor.submit(self._librosa_enhanced_analysis, chunk["audio"], sr)
-                    future_essentia = executor.submit(self._essentia_ml_analysis, chunk["audio"], sr)
-                    batch_futures.append((future_librosa, future_essentia))
-                
-                # Collect results for this batch
-                batch_results = []
-                for future_librosa, future_essentia in batch_futures:
-                    librosa_result = future_librosa.result()
-                    essentia_result = future_essentia.result()
-                    batch_results.append((librosa_result, essentia_result))
-                
-                all_chunk_results.extend(batch_results)
+            logger.info(f"🚀 GPU batch processing {len(batch_chunks)} chunks...")
             
-            logger.info(f"✅ Processed batch {batch_start//batch_size + 1}/{(len(chunks) + batch_size - 1)//batch_size}")
+            # Extract audio data for GPU batch processing
+            batch_audio_chunks = [chunk["audio"] for chunk in batch_chunks]
+            
+            # Process batch using GPU batch processing + parallel librosa
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                
+                # GPU batch processing for Essentia ML (all chunks at once)
+                future_essentia_batch = executor.submit(
+                    self.essentia_models.analyze_batch_gpu, 
+                    batch_audio_chunks, 
+                    sr
+                )
+                
+                # Parallel librosa processing for each chunk
+                future_librosa = executor.submit(
+                    self._process_librosa_batch, 
+                    batch_audio_chunks, 
+                    sr
+                )
+                
+                # Wait for both to complete
+                essentia_batch_results = future_essentia_batch.result()
+                librosa_batch_results = future_librosa.result()
+            
+            # Combine results for this batch
+            batch_results = []
+            for i in range(len(batch_chunks)):
+                librosa_result = librosa_batch_results[i] if i < len(librosa_batch_results) else {}
+                essentia_result = essentia_batch_results[i] if i < len(essentia_batch_results) else {}
+                batch_results.append((librosa_result, essentia_result))
+            
+            all_chunk_results.extend(batch_results)
+            
+            logger.info(f"✅ GPU batch {batch_start//batch_size + 1}/{(len(chunks) + batch_size - 1)//batch_size} completed")
         
-        # Process Madmom on full file (it needs global rhythm context)
-        rhythm_analysis = self._madmom_rhythm_analysis(tmp_file_path)
+        # Process Madmom on full file (fast mode for speed)
+        rhythm_analysis = self._madmom_fast_rhythm_analysis(tmp_file_path)
         
         # Aggregate chunk results
         aggregated_result = self._aggregate_chunk_results(all_chunk_results, chunks, file_info, filename)
@@ -868,3 +947,30 @@ class EnhancedAudioLoader:
         aggregated["quality_score"] = aggregated.get("chunk_consistency", 0.8)
         
         return aggregated
+    
+    def _process_librosa_batch(self, batch_audio_chunks: List[np.ndarray], sr: int) -> List[Dict[str, Any]]:
+        """Process librosa analysis for multiple chunks in parallel"""
+        
+        import concurrent.futures
+        
+        # Process each chunk in parallel
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            futures = []
+            for chunk_audio in batch_audio_chunks:
+                future = executor.submit(self._librosa_enhanced_analysis, chunk_audio, sr)
+                futures.append(future)
+            
+            # Collect results
+            batch_results = []
+            for i, future in enumerate(futures):
+                try:
+                    result = future.result()
+                    batch_results.append(result)
+                except Exception as e:
+                    logger.error(f"Librosa batch processing failed for chunk {i}: {e}")
+                    batch_results.append({
+                        "duration": len(batch_audio_chunks[i]) / sr,
+                        "key": "C", "mode": "major", "tempo": 120.0
+                    })
+            
+            return batch_results

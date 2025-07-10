@@ -32,8 +32,8 @@ class MadmomProcessor:
         try:
             logger.info("🔄 Loading Madmom processors...")
             
-            # Tempo estimation processor
-            self.available_processors["tempo"] = TempoEstimationProcessor(fps=100)
+            # Tempo estimation processor (ultra-fast mode)
+            self.available_processors["tempo"] = TempoEstimationProcessor(fps=25)  # Further reduced to 25 fps for speed
             logger.info("✅ Tempo estimation processor loaded")
             
             # RNN Beat processor
@@ -72,16 +72,16 @@ class MadmomProcessor:
             from madmom.features.beats import RNNBeatProcessor
             from madmom.audio import SignalProcessor
             
-            # Create the proper pipeline
-            sig = SignalProcessor(num_channels=1, sample_rate=44100, norm=True)
+            # Create the proper pipeline (optimized for speed)
+            sig = SignalProcessor(num_channels=1, sample_rate=22050, norm=True)  # Reduced sample rate
             frames = sig(audio_file_path)
             
             # Use RNN beat processor for tempo estimation
             beat_proc = RNNBeatProcessor()
             beat_activations = beat_proc(frames)
             
-            # Use tempo estimation processor
-            tempo_proc = TempoEstimationProcessor(fps=100)
+            # Use tempo estimation processor (optimized)
+            tempo_proc = TempoEstimationProcessor(fps=50)  # Reduced from 100 fps
             tempi = tempo_proc(beat_activations)
             
             if len(tempi) > 0:
@@ -140,16 +140,16 @@ class MadmomProcessor:
             from madmom.features.beats import RNNBeatProcessor, BeatTrackingProcessor
             from madmom.audio import SignalProcessor
             
-            # Create the proper pipeline
-            sig = SignalProcessor(num_channels=1, sample_rate=44100, norm=True)
+            # Create the proper pipeline (optimized)
+            sig = SignalProcessor(num_channels=1, sample_rate=22050, norm=True)  # Reduced sample rate
             frames = sig(audio_file_path)
             
             # Process beats with RNN
             beat_proc = RNNBeatProcessor()
             beat_activations = beat_proc(frames)
             
-            # Convert activations to beat times
-            beat_tracker = BeatTrackingProcessor(fps=100)
+            # Convert activations to beat times (optimized)
+            beat_tracker = BeatTrackingProcessor(fps=50)  # Reduced from 100 fps
             beats = beat_tracker(beat_activations)
             
             if len(beats) > 0:
@@ -208,16 +208,16 @@ class MadmomProcessor:
             from madmom.features.downbeats import RNNDownBeatProcessor, DBNDownBeatTrackingProcessor
             from madmom.audio import SignalProcessor
             
-            # Create the proper pipeline
-            sig = SignalProcessor(num_channels=1, sample_rate=44100, norm=True)
+            # Create the proper pipeline (optimized)
+            sig = SignalProcessor(num_channels=1, sample_rate=22050, norm=True)  # Reduced sample rate
             frames = sig(audio_file_path)
             
             # Process downbeats with RNN
             downbeat_proc = RNNDownBeatProcessor()
             downbeat_activations = downbeat_proc(frames)
             
-            # Convert activations to downbeat times
-            downbeat_tracker = DBNDownBeatTrackingProcessor(beats_per_bar=4, fps=100)
+            # Convert activations to downbeat times (optimized)
+            downbeat_tracker = DBNDownBeatTrackingProcessor(beats_per_bar=4, fps=50)  # Reduced from 100 fps
             downbeats = downbeat_tracker(downbeat_activations)
             
             if len(downbeats) > 0 and hasattr(downbeats, 'ndim') and downbeats.ndim > 0:

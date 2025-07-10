@@ -5,6 +5,7 @@ import logging
 import time
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse, HTMLResponse
 import uvicorn
 import torch
 
@@ -253,6 +254,80 @@ async def enhanced_health_check():
             "error": str(e),
             "timestamp": time.time()
         }
+
+@app.post("/api/audio/analyze-streaming")
+async def analyze_audio_streaming(file: UploadFile = File(...)):
+    """
+    Streaming audio analysis - returns progress in real-time
+    
+    This endpoint streams progress updates as the analysis progresses:
+    1. File upload confirmation
+    2. Audio loading progress  
+    3. GPU batch processing progress
+    4. Librosa analysis progress
+    5. Madmom analysis progress
+    6. Final results
+    """
+    import json
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+    
+    async def analysis_stream():
+        try:
+            # Step 1: File upload confirmation
+            file_content = await file.read()
+            file_size_mb = len(file_content) / (1024 * 1024)
+            
+            yield f"data: {json.dumps({'status': 'upload_complete', 'filename': file.filename, 'size_mb': round(file_size_mb, 2), 'progress': 10})}\n\n"
+            await asyncio.sleep(0.1)
+            
+            # Step 2: Audio loading
+            yield f"data: {json.dumps({'status': 'loading_audio', 'message': 'Processing audio data...', 'progress': 20})}\n\n"
+            await asyncio.sleep(0.1)
+            
+            # Step 3: Start analysis in background thread
+            def run_analysis():
+                return enhanced_loader.analyze_enhanced(file_content, file.filename)
+            
+            with ThreadPoolExecutor() as executor:
+                # Submit analysis task
+                future = executor.submit(run_analysis)
+                
+                # Send progress updates while analysis runs
+                progress = 30
+                while not future.done():
+                    yield f"data: {json.dumps({'status': 'analyzing', 'message': 'GPU batch processing in progress...', 'progress': min(progress, 85)})}\n\n"
+                    await asyncio.sleep(2)  # Send update every 2 seconds
+                    progress += 10
+                
+                # Get final result
+                result = future.result()
+                
+            # Step 4: Final results
+            yield f"data: {json.dumps({'status': 'complete', 'progress': 100, 'result': result})}\n\n"
+            
+        except Exception as e:
+            error_msg = f"Analysis failed: {str(e)}"
+            yield f"data: {json.dumps({'status': 'error', 'message': error_msg, 'progress': 0})}\n\n"
+    
+    return StreamingResponse(
+        analysis_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+        }
+    )
+
+@app.get("/streaming", response_class=HTMLResponse)
+async def streaming_interface():
+    """Serve the streaming test interface"""
+    try:
+        with open("streaming_test.html", "r") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        return HTMLResponse(content="<h1>Streaming interface not found</h1>", status_code=404)
 
 # Root endpoint
 @app.get("/")

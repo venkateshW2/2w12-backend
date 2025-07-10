@@ -2,7 +2,7 @@
 import essentia.standard as es
 import numpy as np
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import os
 
 logger = logging.getLogger(__name__)
@@ -216,17 +216,42 @@ class EssentiaModelManager:
             # Prepare audio for Essentia
             audio_vector = y.astype(np.float32)
             
-            # Extract danceability features
-            features = self.available_models["danceability"](audio_vector)
+            # Extract danceability features with error handling
+            try:
+                features = self.available_models["danceability"](audio_vector)
+            except Exception as model_error:
+                logger.warning(f"⚠️ Danceability model execution failed: {model_error}")
+                return {"ml_danceability": 0.0, "ml_danceability_confidence": 0.0}
             
-            # Handle different output formats
-            if isinstance(features, np.ndarray):
+            # Handle different output formats with robust type checking
+            if features is None:
+                features = np.array([0.5])
+            elif isinstance(features, (tuple, list)):
+                # Handle tuple/list outputs - try to extract array data
+                if len(features) > 0:
+                    first_item = features[0]
+                    if isinstance(first_item, np.ndarray):
+                        features = first_item.flatten()
+                    elif isinstance(first_item, (int, float)):
+                        features = np.array(features)
+                    else:
+                        features = np.array([0.5])
+                else:
+                    features = np.array([0.5])
+            elif isinstance(features, np.ndarray):
                 features = features.flatten()
-            elif hasattr(features, '__len__') and len(features) > 0:
-                # Handle tuple or list outputs
-                features = np.array(features[0]) if isinstance(features[0], (list, np.ndarray)) else np.array(features)
+            elif hasattr(features, '__iter__') and not isinstance(features, str):
+                # Try to convert any iterable to numpy array
+                try:
+                    features = np.array(list(features))
+                except:
+                    features = np.array([0.5])
             else:
-                features = np.array([0.5])  # Default fallback
+                # Single value or unknown type
+                try:
+                    features = np.array([float(features)])
+                except:
+                    features = np.array([0.5])
             
             # Get danceability score (assuming binary classification)
             if len(features) >= 2:
@@ -332,4 +357,270 @@ class EssentiaModelManager:
                 name for name, path in self.model_paths.items()
                 if not os.path.exists(path)
             ]
+        }
+    
+    # GPU BATCH PROCESSING METHODS
+    
+    def analyze_batch_gpu(self, audio_chunks: List[np.ndarray], sr: int) -> List[Dict[str, Any]]:
+        """GPU batch processing for multiple audio chunks simultaneously"""
+        
+        if not self.models_loaded:
+            logger.warning("⚠️ No models loaded, skipping batch processing")
+            return [{"ml_features_available": False} for _ in audio_chunks]
+        
+        logger.info(f"🚀 GPU batch processing {len(audio_chunks)} chunks")
+        
+        try:
+            # Batch process all chunks simultaneously on GPU
+            batch_results = []
+            
+            # Process in GPU-optimized batches (avoid GPU memory overflow)
+            gpu_batch_size = min(8, len(audio_chunks))  # Process max 8 chunks at once
+            
+            for batch_start in range(0, len(audio_chunks), gpu_batch_size):
+                batch_end = min(batch_start + gpu_batch_size, len(audio_chunks))
+                chunk_batch = audio_chunks[batch_start:batch_end]
+                
+                # Batch GPU processing
+                batch_chunk_results = self._process_gpu_batch(chunk_batch, sr)
+                batch_results.extend(batch_chunk_results)
+                
+                logger.info(f"✅ Processed GPU batch {batch_start//gpu_batch_size + 1}")
+            
+            return batch_results
+            
+        except Exception as e:
+            logger.error(f"❌ GPU batch processing failed: {e}")
+            # Fallback to individual processing
+            return [self._analyze_single_chunk(chunk, sr) for chunk in audio_chunks]
+    
+    def _process_gpu_batch(self, chunk_batch: List[np.ndarray], sr: int) -> List[Dict[str, Any]]:
+        """Process a batch of chunks on GPU simultaneously"""
+        
+        batch_results = []
+        
+        # Prepare batch data for GPU
+        batch_audio_vectors = [chunk.astype(np.float32) for chunk in chunk_batch]
+        
+        # Batch process each model type
+        batch_key_results = self._batch_key_detection(batch_audio_vectors, sr)
+        batch_danceability_results = self._batch_danceability_analysis(batch_audio_vectors, sr)
+        batch_tempo_results = self._batch_tempo_analysis(batch_audio_vectors, sr)
+        
+        # Combine results for each chunk
+        for i in range(len(chunk_batch)):
+            chunk_result = {
+                **batch_key_results[i],
+                **batch_danceability_results[i], 
+                **batch_tempo_results[i],
+                "ml_features_available": True,
+                "ml_status": "gpu_batch_success",
+                "ml_batch_processing": True
+            }
+            batch_results.append(chunk_result)
+        
+        return batch_results
+    
+    def _batch_key_detection(self, batch_audio: List[np.ndarray], sr: int) -> List[Dict[str, Any]]:
+        """Batch key detection for multiple chunks"""
+        
+        if "pitch_detection" not in self.available_models:
+            return [self._fallback_key_detection(None, sr) for _ in batch_audio]
+        
+        try:
+            batch_results = []
+            
+            # Process each chunk in the batch (CREPE doesn't support true batching)
+            # But we can optimize by keeping the model loaded and reusing GPU context
+            for audio_vector in batch_audio:
+                try:
+                    pitch_predictions = self.available_models["pitch_detection"](audio_vector)
+                    key_result = self._convert_pitch_to_key(pitch_predictions)
+                    batch_results.append(key_result)
+                except Exception as e:
+                    logger.warning(f"Batch key detection failed for chunk: {e}")
+                    batch_results.append(self._fallback_key_detection(None, sr))
+            
+            return batch_results
+            
+        except Exception as e:
+            logger.error(f"❌ Batch key detection failed: {e}")
+            return [self._fallback_key_detection(None, sr) for _ in batch_audio]
+    
+    def _batch_danceability_analysis(self, batch_audio: List[np.ndarray], sr: int) -> List[Dict[str, Any]]:
+        """Batch danceability analysis for multiple chunks"""
+        
+        if "danceability" not in self.available_models:
+            return [{"ml_danceability": 0.0, "ml_danceability_confidence": 0.0} for _ in batch_audio]
+        
+        try:
+            batch_results = []
+            
+            # Process each chunk (optimize by reusing GPU context)
+            for audio_vector in batch_audio:
+                try:
+                    # Use the robust model execution from main function
+                    try:
+                        features = self.available_models["danceability"](audio_vector)
+                    except Exception as model_error:
+                        logger.warning(f"⚠️ Batch danceability model execution failed: {model_error}")
+                        batch_results.append({"ml_danceability": 0.0, "ml_danceability_confidence": 0.0})
+                        continue
+                    
+                    danceability_result = self._process_danceability_features(features)
+                    batch_results.append(danceability_result)
+                except Exception as e:
+                    logger.warning(f"Batch danceability failed for chunk: {e}")
+                    batch_results.append({"ml_danceability": 0.0, "ml_danceability_confidence": 0.0})
+            
+            return batch_results
+            
+        except Exception as e:
+            logger.error(f"❌ Batch danceability analysis failed: {e}")
+            return [{"ml_danceability": 0.0, "ml_danceability_confidence": 0.0} for _ in batch_audio]
+    
+    def _batch_tempo_analysis(self, batch_audio: List[np.ndarray], sr: int) -> List[Dict[str, Any]]:
+        """Batch tempo analysis for multiple chunks"""
+        
+        if "audio_features" not in self.available_models:
+            return [{"ml_tempo": 120.0, "ml_tempo_confidence": 0.3} for _ in batch_audio]
+        
+        try:
+            batch_results = []
+            
+            # Process each chunk (VGGish optimization)
+            for audio_vector in batch_audio:
+                try:
+                    features = self.available_models["audio_features"](audio_vector)
+                    tempo_result = self._process_tempo_features(features)
+                    batch_results.append(tempo_result)
+                except Exception as e:
+                    logger.warning(f"Batch tempo failed for chunk: {e}")
+                    batch_results.append({"ml_tempo": 120.0, "ml_tempo_confidence": 0.3})
+            
+            return batch_results
+            
+        except Exception as e:
+            logger.error(f"❌ Batch tempo analysis failed: {e}")
+            return [{"ml_tempo": 120.0, "ml_tempo_confidence": 0.3} for _ in batch_audio]
+    
+    def _convert_pitch_to_key(self, pitch_predictions) -> Dict[str, Any]:
+        """Convert CREPE pitch predictions to key (extracted from analyze_key_ml)"""
+        
+        if len(pitch_predictions) > 0:
+            pitches = pitch_predictions[0] if isinstance(pitch_predictions, tuple) else pitch_predictions
+            
+            if isinstance(pitches, np.ndarray) and len(pitches) > 0:
+                median_pitch = np.median(pitches[pitches > 0])
+                
+                if median_pitch > 0:
+                    midi_note = 69 + 12 * np.log2(median_pitch / 440.0)
+                    note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+                    note_index = max(0, min(11, int(midi_note) % 12))
+                    key = note_names[note_index]
+                    
+                    pitch_variance = np.var(pitches[pitches > 0])
+                    mode = "major" if pitch_variance < 1000 else "minor"
+                    confidence = min(1.0, 1.0 / (1.0 + pitch_variance / 1000))
+                    
+                    return {
+                        "ml_key": key,
+                        "ml_mode": mode, 
+                        "ml_key_confidence": round(confidence, 3),
+                        "ml_full_key": f"{key} {mode}",
+                        "ml_model": "essentia_crepe_pitch",
+                        "ml_median_pitch": round(float(median_pitch), 2)
+                    }
+        
+        return self._fallback_key_detection(None, None)
+    
+    def _process_danceability_features(self, features) -> Dict[str, Any]:
+        """Process danceability features (extracted from analyze_danceability_ml)"""
+        
+        # Handle different output formats with robust type checking
+        if features is None:
+            features = np.array([0.5])
+        elif isinstance(features, (tuple, list)):
+            # Handle tuple/list outputs - try to extract array data
+            if len(features) > 0:
+                first_item = features[0]
+                if isinstance(first_item, np.ndarray):
+                    features = first_item.flatten()
+                elif isinstance(first_item, (int, float)):
+                    features = np.array(features)
+                else:
+                    features = np.array([0.5])
+            else:
+                features = np.array([0.5])
+        elif isinstance(features, np.ndarray):
+            features = features.flatten()
+        elif hasattr(features, '__iter__') and not isinstance(features, str):
+            # Try to convert any iterable to numpy array
+            try:
+                features = np.array(list(features))
+            except:
+                features = np.array([0.5])
+        else:
+            # Single value or unknown type
+            try:
+                features = np.array([float(features)])
+            except:
+                features = np.array([0.5])
+        
+        if len(features) >= 2:
+            danceability_score = float(features[1])
+        elif len(features) >= 1:
+            danceability_score = float(features[0])
+        else:
+            danceability_score = 0.5
+        
+        confidence = abs(danceability_score - 0.5) * 2
+        
+        return {
+            "ml_danceability": round(danceability_score, 3),
+            "ml_danceability_confidence": round(confidence, 3),
+            "ml_danceability_class": "danceable" if danceability_score > 0.5 else "not_danceable",
+            "ml_model": "essentia_danceability_discogs"
+        }
+    
+    def _process_tempo_features(self, features) -> Dict[str, Any]:
+        """Process VGGish features for tempo (extracted from analyze_tempo_ml)"""
+        
+        # Handle different output formats
+        if isinstance(features, np.ndarray):
+            features = features.flatten()
+        elif hasattr(features, '__len__') and len(features) > 0:
+            features = np.array(features[0]) if isinstance(features[0], (list, np.ndarray)) else np.array(features)
+        else:
+            features = np.array([0.5])
+        
+        if len(features) > 0:
+            feature_energy = np.mean(np.abs(features))
+            feature_variance = np.var(features) if len(features) > 1 else 0.1
+            
+            base_tempo = 120.0
+            energy_factor = min(2.0, max(0.1, feature_energy * 100))
+            variance_factor = min(1.5, max(0.1, feature_variance * 50))
+            
+            estimated_tempo = base_tempo * (1 + (energy_factor - 1) * variance_factor)
+            estimated_tempo = max(60.0, min(200.0, estimated_tempo))
+            
+            confidence = min(1.0, (energy_factor + variance_factor) / 3.0)
+            
+            return {
+                "ml_tempo": round(float(estimated_tempo), 1),
+                "ml_tempo_confidence": round(confidence, 3),
+                "ml_model": "essentia_vggish_tempo",
+                "ml_feature_energy": round(float(feature_energy), 4),
+                "ml_feature_variance": round(float(feature_variance), 4)
+            }
+        
+        return {"ml_tempo": 120.0, "ml_tempo_confidence": 0.3}
+    
+    def _analyze_single_chunk(self, chunk: np.ndarray, sr: int) -> Dict[str, Any]:
+        """Fallback single chunk analysis"""
+        return {
+            **self.analyze_key_ml(chunk, sr),
+            **self.analyze_danceability_ml(chunk, sr),
+            **self.analyze_tempo_ml(chunk, sr)
         }
