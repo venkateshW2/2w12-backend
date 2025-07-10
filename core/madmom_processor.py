@@ -67,11 +67,22 @@ class MadmomProcessor:
             return {"madmom_tempo": 0.0, "madmom_tempo_confidence": 0.0}
         
         try:
-            # Process tempo with Madmom
-            tempo_processor = self.available_processors["tempo"]
+            # Process tempo with Madmom - need to use the correct pipeline
+            from madmom.features.tempo import TempoEstimationProcessor
+            from madmom.features.beats import RNNBeatProcessor
+            from madmom.audio import SignalProcessor
             
-            # Madmom processes directly from file
-            tempi = tempo_processor(audio_file_path)
+            # Create the proper pipeline
+            sig = SignalProcessor(num_channels=1, sample_rate=44100, norm=True)
+            frames = sig(audio_file_path)
+            
+            # Use RNN beat processor for tempo estimation
+            beat_proc = RNNBeatProcessor()
+            beat_activations = beat_proc(frames)
+            
+            # Use tempo estimation processor
+            tempo_proc = TempoEstimationProcessor(fps=100)
+            tempi = tempo_proc(beat_activations)
             
             if len(tempi) > 0:
                 # Primary tempo (strongest peak)
@@ -125,12 +136,19 @@ class MadmomProcessor:
             return {"madmom_beat_count": 0, "madmom_beat_confidence": 0.0}
         
         try:
-            # Process beats with RNN
-            beat_processor = self.available_processors["beats"]
-            beat_activations = beat_processor(audio_file_path)
+            # Process beats with RNN - use correct pipeline
+            from madmom.features.beats import RNNBeatProcessor, BeatTrackingProcessor
+            from madmom.audio import SignalProcessor
             
-            # Convert activations to beat times (simple peak picking)
-            from madmom.features.beats import BeatTrackingProcessor
+            # Create the proper pipeline
+            sig = SignalProcessor(num_channels=1, sample_rate=44100, norm=True)
+            frames = sig(audio_file_path)
+            
+            # Process beats with RNN
+            beat_proc = RNNBeatProcessor()
+            beat_activations = beat_proc(frames)
+            
+            # Convert activations to beat times
             beat_tracker = BeatTrackingProcessor(fps=100)
             beats = beat_tracker(beat_activations)
             
@@ -186,14 +204,30 @@ class MadmomProcessor:
             return {"madmom_meter": "unknown", "madmom_downbeat_count": 0}
         
         try:
-            # Process downbeats with RNN
-            downbeat_processor = self.available_processors["downbeats"]
-            downbeats = downbeat_processor(audio_file_path)
+            # Process downbeats with RNN - use correct pipeline
+            from madmom.features.downbeats import RNNDownBeatProcessor, DBNDownBeatTrackingProcessor
+            from madmom.audio import SignalProcessor
             
-            if len(downbeats) > 0:
+            # Create the proper pipeline
+            sig = SignalProcessor(num_channels=1, sample_rate=44100, norm=True)
+            frames = sig(audio_file_path)
+            
+            # Process downbeats with RNN
+            downbeat_proc = RNNDownBeatProcessor()
+            downbeat_activations = downbeat_proc(frames)
+            
+            # Convert activations to downbeat times
+            downbeat_tracker = DBNDownBeatTrackingProcessor(beats_per_bar=4, fps=100)
+            downbeats = downbeat_tracker(downbeat_activations)
+            
+            if len(downbeats) > 0 and hasattr(downbeats, 'ndim') and downbeats.ndim > 0:
                 # Downbeat analysis
-                downbeat_times = downbeats[:, 0]  # Downbeat positions
-                downbeat_confidences = downbeats[:, 1]  # Confidence scores
+                if downbeats.ndim == 2:
+                    downbeat_times = downbeats[:, 0]  # Downbeat positions
+                    downbeat_confidences = downbeats[:, 1] if downbeats.shape[1] > 1 else np.ones(len(downbeat_times)) * 0.5
+                else:
+                    downbeat_times = downbeats
+                    downbeat_confidences = np.ones(len(downbeat_times)) * 0.5
                 
                 # Estimate meter from downbeat intervals
                 if len(downbeat_times) > 1:
@@ -216,10 +250,10 @@ class MadmomProcessor:
                 mean_confidence = np.mean(downbeat_confidences)
                 
                 return {
-                    "madmom_downbeat_count": len(downbeats),
-                    "madmom_downbeat_confidence": round(mean_confidence, 3),
+                    "madmom_downbeat_count": len(downbeat_times),
+                    "madmom_downbeat_confidence": round(float(mean_confidence), 3),
                     "madmom_meter": estimated_meter,
-                    "madmom_downbeat_interval": round(mean_downbeat_interval, 2),
+                    "madmom_downbeat_interval": round(float(mean_downbeat_interval), 2),
                     "madmom_model": "rnn_downbeat_tracking"
                 }
             else:

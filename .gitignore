@@ -65,3 +65,76 @@ models/discogs_release_embeddings-effnet-bs64-1.pb
 models/discogs_track_embeddings-effnet-bs64-1.pb
 models/discogs-effnet-bs64-1.pb
 models/discogs-effnet-key.pb
+models/Crepe Full Model.pb
+models/Crepe Large Model.pb
+models/Crepe Medium 1.pb
+models/Crepe Small Model.pb
+models/Crepe Tiny Model.pb
+models/Danceability Audioset Yamnet.pb
+models/Danceability Discogs Effnet.pb
+models/Danceability MusicNN Model.pb
+models/Danceability OpenL3 Music Model.pb
+models/Danceability VGGish Model.pb
+models/Discogs Artist Embeddings (1).pb
+models/Discogs EffNet BS64.pb
+models/Discogs EffNet BS512 Model.pb
+models/Discogs Genre Data.pb
+models/Discogs Label Embeddings EffNet.pb
+models/Discogs Multi Embeddings EffNet BS64.pb
+models/Discogs Release Embeddings EffNet (1).pb
+models/Discogs Release Embeddings EffNet.pb
+models/discogs_track_embeddings-effnet-bs64-1 (1).pb
+models/Effnet BS64 Model.pb
+models/FSD Sinet VGG41 Model.pb
+models/FSD Sinet VGG42 Model (1).pb
+models/FSD Sinet VGG42 Model.pb
+models/FSD Sinet VGG42 TLpf APS 1.pb
+models/Gender AudioSet VGGish.pb
+models/Gender Audioset Yamnet.pb
+models/Gender Discogs Effnet Model.pb
+models/Gender MusicNN Model.pb
+models/Gender OpenL3 Music Embeddings.pb
+models/Genre Discogs 400 Model (1).pb
+models/Genre Discogs 400 Model (2).pb
+models/Genre Discogs 400 Model (3).pb
+models/Genre Discogs 400 Model (4).pb
+models/Genre Discogs 400 Model (5).pb
+models/Genre Discogs 400 Model (6).pb
+models/Genre Discogs 400 Model (7).pb
+models/Genre Discogs 400 Model.pb
+models/Jamendo Instrument Embeddings.pb
+models/Jamendo Instrument Label Embeddings.pb
+models/Jamendo Instrument Release Embeddings.pb
+models/Jamendo Instrument Track Embeddings.pb
+models/MSD MusicNN Model.pb
+models/MSD VGG Model.pb
+models/Mtg Jamendo Instrument Multi Embeddings.pb
+models/MTT VGG Model.pb
+models/Muse MusicNN Model (1).pb
+models/Muse MusicNN Model.pb
+models/Muse VGGish Model (1).pb
+models/Muse VGGish Model (2).pb
+models/Muse VGGish Model.pb
+models/MusicNN Model 1.pb
+models/MusicNN Model.pb
+models/Nsynth Instrument.pb
+models/Spleeter 2s 3.pb
+models/Spleeter 4s 3.pb
+models/Spleeter 5s 3.pb
+models/Tonal Atonal Audioset YamNet.pb
+models/Tonal Atonal Discogs Effnet.pb
+models/Tonal Atonal MusicNN Model.pb
+models/Tonal Atonal OpenL3 Music Embeddings.pb
+models/Tonal Atonal VGGish Model.pb
+models/Voice Instrumental Model (1).pb
+models/Voice Instrumental Model (2).pb
+models/Voice Instrumental Model (3).pb
+models/Voice Instrumental Model (4).pb
+models/Voice Instrumental Model (5).pb
+models/Voice Instrumental Model.pb
+models/Voice Instrumental VGGish Model (1).pb
+models/Voice Instrumental VGGish Model.pb
+models/Voice Instrumental YamNet Model (1).pb
+models/Voice Instrumental YamNet Model.pb
+models/YamNet AudioSet Model.pb
+models/Yamnet Model.pb

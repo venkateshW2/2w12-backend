@@ -11,6 +11,21 @@ from core.database_manager import SoundToolsDatabase
 
 logger = logging.getLogger(__name__)
 
+def convert_numpy_types(obj):
+    """Convert numpy types to native Python types for JSON serialization"""
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {key: convert_numpy_types(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(item) for item in obj]
+    else:
+        return obj
+
 class EnhancedAudioLoader:
     """
     Enhanced Audio Loader - Foundation for ML Pipeline
@@ -123,6 +138,7 @@ class EnhancedAudioLoader:
             # From Image 2: Return cache hit with timing
             total_time = time.time() - start_total
             logger.info(f"⚡ Cache HIT - returned in {total_time:.3f}s")
+            cached_result = convert_numpy_types(cached_result)
             return {
                 **cached_result,
                 "cache_status": "HIT",
@@ -151,7 +167,10 @@ class EnhancedAudioLoader:
                 "analysis_version": self.analysis_version
             }
             
-            # Step 5: Cache for future use
+            # Step 5: Convert numpy types to JSON-serializable types
+            final_result = convert_numpy_types(final_result)
+            
+            # Step 6: Cache for future use
             cache_success = self.db.cache_analysis_result(fingerprint, final_result)
             final_result["cached"] = cache_success
             
@@ -222,6 +241,9 @@ class EnhancedAudioLoader:
                 **core_analysis, **ml_analysis, **rhythm_analysis
                 })
             }
+            
+            # Convert numpy types to JSON-serializable types
+            comprehensive_result = convert_numpy_types(comprehensive_result)
             
             return comprehensive_result
             
@@ -591,10 +613,18 @@ class EnhancedAudioLoader:
             # ML-based genre classification
             ml_genre_analysis = self.essentia_models.analyze_genre_ml(y, sr)
             
+            # ML-based danceability analysis
+            ml_danceability_analysis = self.essentia_models.analyze_danceability_ml(y, sr)
+            
+            # ML-based tempo detection
+            ml_tempo_analysis = self.essentia_models.analyze_tempo_ml(y, sr)
+            
             # Combine ML results
             ml_results = {
                 **ml_key_analysis,
                 **ml_genre_analysis,
+                **ml_danceability_analysis,
+                **ml_tempo_analysis,
                 "ml_features_available": True,
                 "ml_status": "success",
                 "ml_model_count": len(self.essentia_models.available_models)
