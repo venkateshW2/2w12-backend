@@ -59,8 +59,8 @@
             document.getElementById('progressContainer').style.display = 'block';
             document.getElementById('results').style.display = 'none';
             
-            // Create timeline chunks based on file duration (estimate)
-            createTimeline(estimateChunks(file.size));
+            // Create timeline for 3 parallel processing components
+            createTimeline(3);
             
             // Create form data
             const formData = new FormData();
@@ -135,6 +135,8 @@
                 case 'complete':
                     className += ' complete';
                     message = `🎉 Analysis Complete!`;
+                    // Complete all timeline boxes
+                    completeAllTimelineBoxes();
                     showResults(data.result);
                     break;
                 case 'error':
@@ -151,11 +153,17 @@
             const chunksContainer = document.getElementById('chunks');
             chunksContainer.innerHTML = '';
             
+            const componentNames = [
+                'Librosa Enhanced Analysis',
+                'Essentia ML Models (GPU)',
+                'Madmom Rhythm Analysis'
+            ];
+            
             for (let i = 0; i < chunkCount; i++) {
                 const chunk = document.createElement('div');
                 chunk.className = 'chunk';
                 chunk.id = `chunk-${i}`;
-                chunk.title = `Chunk ${i + 1}`;
+                chunk.title = componentNames[i] || `Component ${i + 1}`;
                 chunksContainer.appendChild(chunk);
             }
         }
@@ -175,6 +183,13 @@
             });
         }
         
+        function completeAllTimelineBoxes() {
+            const chunks = document.querySelectorAll('.chunk');
+            chunks.forEach(chunk => {
+                chunk.className = 'chunk complete';
+            });
+        }
+        
         function estimateChunks(fileSize) {
             // Rough estimate: 1MB per 10 seconds, 120s chunks
             const estimatedDuration = (fileSize / 1024 / 1024) * 10;
@@ -185,12 +200,14 @@
             const results = document.getElementById('results');
             const resultData = document.getElementById('resultData');
             
-            // Extract key metrics
+            // Extract key metrics - handle nested structure
             const analysis = result.analysis || result;
+            const fileInfo = analysis.file_info || {};
+            
             const keyInfo = `${analysis.key || 'Unknown'} ${analysis.mode || ''}`;
             const tempo = analysis.madmom_tempo || analysis.tempo || 'Unknown';
-            const duration = analysis.duration || 'Unknown';
-            const processingTime = analysis.analysis_time || analysis.total_time || 'Unknown';
+            const duration = fileInfo.analyzed_duration || analysis.duration || 'Unknown';
+            const processingTime = analysis.response_time || analysis.analysis_time || analysis.total_time || 'Unknown';
             
             resultData.innerHTML = `
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">

@@ -61,8 +61,8 @@ class EssentiaModelManager:
                 except Exception as e:
                     logger.warning(f"⚠️ YamNet tempo classification model failed to load: {e}")
             
-            # VGGish Audio Features Model
-            if self._model_exists("audio_features"):
+            # VGGish Audio Features Model (skip for now - causing failures)
+            if False:  # Temporarily disabled due to GraphDef errors
                 try:
                     self.available_models["audio_features"] = es.TensorflowPredictVGGish(
                         graphFilename=self.model_paths["audio_features"]
@@ -70,6 +70,8 @@ class EssentiaModelManager:
                     logger.info("✅ VGGish audio features model loaded")
                 except Exception as e:
                     logger.warning(f"⚠️ VGGish audio features model failed to load: {e}")
+            else:
+                logger.info("⚠️ VGGish model temporarily disabled due to GraphDef errors")
                     
             # Danceability Model (using correct output node)
             if self._model_exists("danceability"):

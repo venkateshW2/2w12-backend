@@ -137,19 +137,8 @@ class EnhancedAudioLoader:
         # Step 2: Check cache first
         cached_result = self.db.get_cached_analysis(fingerprint)
         if cached_result:
-            # Even for cache hits, we can trigger background research if not done yet
-            if self.research_enabled:
-                fingerprint = cached_result.get("fingerprint")
-                if fingerprint:
-                    # Check if research already done
-                    research_key = f"research:{fingerprint}"
-                    if not self.db.redis_client.exists(research_key):
-                        # Start background research (non-blocking)
-                        asyncio.create_task(
-                            self.mb_researcher.background_research(
-                                fingerprint, file_content, cached_result
-                            )
-                        )
+            # Always skip background research to avoid async issues in streaming context
+            logger.info("🔄 Background research skipped - avoiding async issues in streaming")
             # From Image 2: Return cache hit with timing
             total_time = time.time() - start_total
             logger.info(f"⚡ Cache HIT - returned in {total_time:.3f}s")
@@ -192,13 +181,18 @@ class EnhancedAudioLoader:
             if self.research_enabled:
                 fingerprint = final_result.get("fingerprint")
                 if fingerprint:
-                    # Start background research (does not block response)
-                    asyncio.create_task(
-                        self.mb_researcher.background_research(
-                            fingerprint, file_content, final_result
+                    try:
+                        # Start background research (does not block response) - only if event loop exists
+                        asyncio.create_task(
+                            self.mb_researcher.background_research(
+                                fingerprint, file_content, final_result
+                            )
                         )
-                    )
-                    final_result["background_research_started"] = True
+                        final_result["background_research_started"] = True
+                    except RuntimeError:
+                        # No event loop running (e.g., in ThreadPoolExecutor) - skip background research
+                        logger.info("🔄 Background research skipped - no event loop available")
+                        final_result["background_research_started"] = False
                 else:
                     final_result["background_research_started"] = False
             
@@ -217,14 +211,18 @@ class EnhancedAudioLoader:
 
         """
         
-        # Create temporary file for librosa
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_file:
-            tmp_file.write(file_content)
-            tmp_file_path = tmp_file.name
+        # Create temporary file for librosa - ensure it's accessible after closing
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
+        tmp_file.write(file_content)
+        tmp_file.flush()  # Ensure data is written to disk
+        tmp_file.close()  # Close the file handle but keep the file on disk
+        tmp_file_path = tmp_file.name
         
         try:
             # Load audio with validation and GPU-optimized chunking
+            logger.info(f"🔍 Loading audio from temp file: {tmp_file_path}")
             y, sr, file_info = self._smart_audio_loading(tmp_file_path)
+            logger.info(f"✅ Audio loaded successfully: {file_info.get('analyzed_duration', 0):.1f}s")
             
             # Check if we need chunking for large files (GPU optimization)
             should_chunk = self._should_use_chunking(y, sr, file_info)
@@ -244,14 +242,27 @@ class EnhancedAudioLoader:
             
             with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
                 # Submit all tasks to thread pool
+                logger.info("🚀 Submitting librosa analysis task...")
                 future_core = executor.submit(self._librosa_enhanced_analysis, y, sr)
+                
+                logger.info("🚀 Submitting Essentia ML analysis task...")
                 future_ml = executor.submit(self._essentia_ml_analysis, y, sr)
+                
+                logger.info(f"🚀 Submitting Madmom rhythm analysis task for file: {tmp_file_path}")
                 future_rhythm = executor.submit(self._madmom_fast_rhythm_analysis, tmp_file_path)
                 
                 # Wait for fast analyses to complete (don't wait for heavy downbeat analysis)
+                logger.info("⏳ Waiting for librosa analysis...")
                 core_analysis = future_core.result()
+                logger.info("✅ Librosa analysis completed")
+                
+                logger.info("⏳ Waiting for Essentia ML analysis...")
                 ml_analysis = future_ml.result() 
+                logger.info("✅ Essentia ML analysis completed")
+                
+                logger.info("⏳ Waiting for Madmom rhythm analysis...")
                 rhythm_analysis = future_rhythm.result()  # Fast rhythm only
+                logger.info("✅ Madmom rhythm analysis completed")
             
             parallel_time = time.time() - parallel_start
             logger.info(f"⚡ Parallel analysis completed in {parallel_time:.2f}s")
@@ -306,14 +317,17 @@ class EnhancedAudioLoader:
             original_duration = info.duration
             original_sr = info.samplerate
             
+            # OPTIMIZED: Use 11025 Hz for 2x speed improvement
+            optimized_sample_rate = 11025
+            
             # Duration-based loading strategy
             if original_duration > self.max_duration:
                 logger.warning(f"Large file detected ({original_duration:.1f}s), loading first {self.max_duration}s")
-                y, sr = librosa.load(file_path, sr=self.sample_rate, duration=self.max_duration)
+                y, sr = librosa.load(file_path, sr=optimized_sample_rate, duration=self.max_duration)
                 analyzed_duration = self.max_duration
             else:
                 # Load complete file
-                y, sr = librosa.load(file_path, sr=self.sample_rate)
+                y, sr = librosa.load(file_path, sr=optimized_sample_rate)
                 analyzed_duration = original_duration
             
             file_info = {
@@ -322,10 +336,11 @@ class EnhancedAudioLoader:
                 "original_sample_rate": int(original_sr),
                 "processing_sample_rate": int(sr),
                 "truncated": original_duration > self.max_duration,
-                "file_size_mb": round(os.path.getsize(file_path) / 1024 / 1024, 2)
+                "file_size_mb": round(os.path.getsize(file_path) / 1024 / 1024, 2),
+                "optimization": "11025Hz_fast_mode"
             }
             
-            logger.info(f"📊 Audio loaded: {analyzed_duration:.1f}s @ {sr}Hz")
+            logger.info(f"📊 Audio loaded: {analyzed_duration:.1f}s @ {sr}Hz (optimized)")
             return y, sr, file_info
             
         except Exception as e:
@@ -517,10 +532,14 @@ class EnhancedAudioLoader:
             return {"tempo": 120.0, "tempo_confidence": 0.5}
     
     def _harmonic_content_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
-        """Harmonic vs percussive content analysis"""
+        """OPTIMIZED: Fast harmonic vs percussive content analysis"""
         try:
-            # Harmonic/percussive separation
-            y_harmonic, y_percussive = librosa.effects.hpss(y)
+            # OPTIMIZED: Fast harmonic/percussive separation with reduced margin
+            y_harmonic, y_percussive = librosa.effects.hpss(
+                y, 
+                margin=(1.0, 1.0),  # Reduced margin for speed (default is 1.0, 5.0)
+                power=1.0           # Reduced power for speed (default is 2.0)
+            )
             
             # Calculate ratios
             harmonic_energy = float(np.mean(np.abs(y_harmonic)))
@@ -534,42 +553,55 @@ class EnhancedAudioLoader:
                 "harmonic_ratio": round(harmonic_ratio, 3),
                 "percussive_ratio": round(percussive_ratio, 3),
                 "harmonic_confidence": round(harmonic_ratio, 3),
-                "content_type": "harmonic" if harmonic_ratio > percussive_ratio else "percussive"
+                "content_type": "harmonic" if harmonic_ratio > percussive_ratio else "percussive",
+                "optimization": "fast_hpss"
             }
         except Exception as e:
             logger.error(f"Harmonic analysis error: {e}")
             return {"harmonic_confidence": 0.5}
     
     def _spectral_feature_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
-        """Enhanced spectral feature analysis"""
+        """OPTIMIZED: Fast spectral feature analysis - essential features only"""
         try:
-            # Spectral features
-            spectral_centroid = float(np.mean(librosa.feature.spectral_centroid(y=y, sr=sr)))
-            spectral_rolloff = float(np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr)))
-            spectral_bandwidth = float(np.mean(librosa.feature.spectral_bandwidth(y=y, sr=sr)))
-            spectral_contrast = float(np.mean(librosa.feature.spectral_contrast(y=y, sr=sr)))
-            zero_crossing_rate = float(np.mean(librosa.feature.zero_crossing_rate(y)))
-            spectral_flatness = float(np.mean(librosa.feature.spectral_flatness(y=y)))
+            # OPTIMIZED: Use faster hop_length for all spectral features
+            hop_length = 2048  # 4x larger hop for speed
+            
+            # Essential spectral features only (skip expensive ones)
+            spectral_centroid = float(np.mean(librosa.feature.spectral_centroid(
+                y=y, sr=sr, hop_length=hop_length
+            )))
+            spectral_rolloff = float(np.mean(librosa.feature.spectral_rolloff(
+                y=y, sr=sr, hop_length=hop_length
+            )))
+            zero_crossing_rate = float(np.mean(librosa.feature.zero_crossing_rate(
+                y, hop_length=hop_length
+            )))
+            
+            # Skip expensive features: spectral_bandwidth, spectral_contrast, spectral_flatness
             
             return {
                 "spectral_centroid": round(spectral_centroid, 2),
                 "spectral_rolloff": round(spectral_rolloff, 2),
-                "spectral_bandwidth": round(spectral_bandwidth, 2),
-                "spectral_contrast": round(spectral_contrast, 3),
                 "zero_crossing_rate": round(zero_crossing_rate, 4),
-                "spectral_flatness": round(spectral_flatness, 4),
-                "brightness": "bright" if spectral_centroid > 2000 else "dark"
+                "brightness": "bright" if spectral_centroid > 2000 else "dark",
+                "optimization": "fast_spectral"
             }
         except Exception as e:
             logger.error(f"Spectral analysis error: {e}")
             return {"brightness": "unknown"}
     
     def _rhythmic_feature_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
-        """Rhythmic pattern analysis"""
+        """OPTIMIZED: Fast rhythmic pattern analysis"""
         try:
-            # Onset detection
-            onsets = librosa.onset.onset_detect(y=y, sr=sr, units='time')
-            onset_strength = librosa.onset.onset_strength(y=y, sr=sr)
+            # OPTIMIZED: Fast onset detection with larger hop_length
+            hop_length = 1024  # 2x larger hop for speed
+            
+            onsets = librosa.onset.onset_detect(
+                y=y, sr=sr, units='time', hop_length=hop_length
+            )
+            onset_strength = librosa.onset.onset_strength(
+                y=y, sr=sr, hop_length=hop_length
+            )
             
             # Rhythmic regularity
             if len(onsets) > 1:
@@ -582,17 +614,20 @@ class EnhancedAudioLoader:
                 "onset_count": len(onsets),
                 "onset_density": round(len(onsets) / (len(y) / sr), 2),
                 "rhythmic_regularity": round(rhythmic_regularity, 3),
-                "onset_strength_mean": round(float(np.mean(onset_strength)), 4)
+                "onset_strength_mean": round(float(np.mean(onset_strength)), 4),
+                "optimization": "fast_onset"
             }
         except Exception as e:
             logger.error(f"Rhythmic analysis error: {e}")
             return {"onset_count": 0}
     
     def _energy_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
-        """Energy and dynamics analysis"""
+        """OPTIMIZED: Fast energy and dynamics analysis"""
         try:
-            # RMS energy
-            rms = librosa.feature.rms(y=y)[0]
+            # OPTIMIZED: Fast RMS energy with larger hop_length
+            hop_length = 1024  # 2x larger hop for speed
+            
+            rms = librosa.feature.rms(y=y, hop_length=hop_length)[0]
             rms_mean = float(np.mean(rms))
             rms_std = float(np.std(rms))
             dynamic_range = float(np.max(rms) - np.min(rms))
@@ -697,12 +732,25 @@ class EnhancedAudioLoader:
                 "madmom_status": "processors_not_loaded"
             }
         
-        logger.info("🥁 Starting fast Madmom rhythm analysis (tempo + beats only)")
+        logger.info(f"🥁 Starting fast Madmom rhythm analysis for file: {audio_file_path}")
+        
+        # Check if file exists and is accessible
+        if not os.path.exists(audio_file_path):
+            logger.error(f"❌ Audio file not found: {audio_file_path}")
+            return {
+                "madmom_features_available": False,
+                "madmom_status": "file_not_found"
+            }
         
         try:
             # Fast analyses only (skip heavy downbeat analysis)
+            logger.info("🔄 Running tempo analysis...")
             tempo_analysis = self.madmom_processor.analyze_tempo_precise(audio_file_path)
+            logger.info("✅ Tempo analysis completed")
+            
+            logger.info("🔄 Running beat analysis...")
             beat_analysis = self.madmom_processor.analyze_beats_neural(audio_file_path)
+            logger.info("✅ Beat analysis completed")
             
             # Quick result with essential rhythm info
             rhythm_results = {

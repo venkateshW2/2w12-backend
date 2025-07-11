@@ -13,6 +13,8 @@ import torch
 from core.enhanced_audio_loader import EnhancedAudioLoader
 from core.database_manager import SoundToolsDatabase
 
+logger = logging.getLogger(__name__)
+
 # Initialize enhanced components
 enhanced_loader = EnhancedAudioLoader()
 db_manager = SoundToolsDatabase()
@@ -272,22 +274,63 @@ async def analyze_audio_streaming(file: UploadFile = File(...)):
     import asyncio
     from concurrent.futures import ThreadPoolExecutor
     
+    # Read file content BEFORE starting the streaming generator
+    logger.info(f"📁 Reading uploaded file: {file.filename}")
+    try:
+        file_content = await file.read()
+        logger.info(f"✅ File read successfully: {len(file_content)} bytes")
+    except Exception as e:
+        logger.error(f"❌ Failed to read file: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to read uploaded file: {str(e)}")
+    
+    file_size_mb = len(file_content) / (1024 * 1024)
+    filename = file.filename
+    
     async def analysis_stream():
         try:
             # Step 1: File upload confirmation
-            file_content = await file.read()
-            file_size_mb = len(file_content) / (1024 * 1024)
-            
-            yield f"data: {json.dumps({'status': 'upload_complete', 'filename': file.filename, 'size_mb': round(file_size_mb, 2), 'progress': 10})}\n\n"
+            yield f"data: {json.dumps({'status': 'upload_complete', 'filename': filename, 'size_mb': round(file_size_mb, 2), 'progress': 10})}\n\n"
             await asyncio.sleep(0.1)
             
             # Step 2: Audio loading
             yield f"data: {json.dumps({'status': 'loading_audio', 'message': 'Processing audio data...', 'progress': 20})}\n\n"
             await asyncio.sleep(0.1)
             
-            # Step 3: Start analysis in background thread
+            # Step 3: Start analysis in background thread with proper error handling
             def run_analysis():
-                return enhanced_loader.analyze_enhanced(file_content, file.filename)
+                try:
+                    # Set up logging for the thread
+                    import logging
+                    thread_logger = logging.getLogger(__name__ + ".thread")
+                    
+                    thread_logger.info(f"🎵 Starting analysis for {filename}")
+                    thread_logger.info(f"🔍 File content size: {len(file_content)} bytes")
+                    
+                    # Verify file content is valid
+                    if not file_content or len(file_content) == 0:
+                        raise ValueError("Empty file content received")
+                    
+                    # Ensure we don't have any asyncio issues in the thread
+                    import asyncio
+                    try:
+                        # Check if there's already an event loop in this thread
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            # If loop is running, we need to be careful about async calls
+                            thread_logger.warning("⚠️ Event loop detected in thread - this may cause issues")
+                    except RuntimeError:
+                        # No event loop in this thread - this is expected and good
+                        pass
+                    
+                    # Run analysis synchronously (no asyncio in thread)
+                    result = enhanced_loader.analyze_with_caching(file_content, filename)
+                    thread_logger.info(f"✅ Analysis completed for {filename}")
+                    return result
+                except Exception as e:
+                    thread_logger.error(f"❌ Analysis failed for {filename}: {str(e)}")
+                    import traceback
+                    thread_logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+                    raise e
             
             with ThreadPoolExecutor() as executor:
                 # Submit analysis task
@@ -308,6 +351,7 @@ async def analyze_audio_streaming(file: UploadFile = File(...)):
             
         except Exception as e:
             error_msg = f"Analysis failed: {str(e)}"
+            logger.error(f"❌ Streaming analysis error: {error_msg}")
             yield f"data: {json.dumps({'status': 'error', 'message': error_msg, 'progress': 0})}\n\n"
     
     return StreamingResponse(
