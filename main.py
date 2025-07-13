@@ -112,7 +112,7 @@ if streaming_available:
     logger.info("✅ Streaming router included")
 
 # Mount static files for UI components
-app.mount("/ui", StaticFiles(directory="ui"), name="ui-components")
+app.mount("/static", StaticFiles(directory="ui"), name="ui-components")
 
 # Serve the streaming test interface
 @app.get("/streaming", response_class=HTMLResponse)
