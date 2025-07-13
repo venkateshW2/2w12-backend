@@ -142,6 +142,15 @@ async def visualization_interface():
     except FileNotFoundError:
         return HTMLResponse(content="<h1>NB Visualization interface not found</h1>", status_code=404)
 
+@app.get("/ui/debug", response_class=HTMLResponse)
+async def debug_interface():
+    """Serve the debug visualization interface with simplified Canvas rendering"""
+    try:
+        with open("streaming_debug.html", "r") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        return HTMLResponse(content="<h1>Debug interface not found</h1>", status_code=404)
+
 # === DAY 6: ENHANCED ENDPOINTS (NOW WORKING) ===
 
 @app.post("/api/audio/analyze-enhanced")

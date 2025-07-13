@@ -41,19 +41,20 @@ class WaveformCanvas {
     setupCanvas() {
         // Set canvas size to container
         const rect = this.canvas.parentElement.getBoundingClientRect();
-        this.canvas.width = rect.width;
+        this.canvas.width = rect.width || 800; // Fallback width
         this.canvas.height = 200; // Fixed height for waveform
         
         // High DPI support
         const dpr = window.devicePixelRatio || 1;
-        const rect2 = this.canvas.getBoundingClientRect();
         
-        this.canvas.width = rect2.width * dpr;
-        this.canvas.height = rect2.height * dpr;
+        this.canvas.width = this.canvas.width * dpr;
+        this.canvas.height = this.canvas.height * dpr;
         this.ctx.scale(dpr, dpr);
         
-        this.canvas.style.width = rect2.width + 'px';
-        this.canvas.style.height = rect2.height + 'px';
+        this.canvas.style.width = (this.canvas.width / dpr) + 'px';
+        this.canvas.style.height = (this.canvas.height / dpr) + 'px';
+        
+        console.log(`📐 Canvas setup: ${this.canvas.width / dpr}x${this.canvas.height / dpr} (DPR: ${dpr})`);
     }
     
     setupEventListeners() {
@@ -84,13 +85,15 @@ class WaveformCanvas {
             this.duration = this.waveformData.duration || 0;
             
             console.log(`✅ Loaded: ${this.waveformData.width} waveform points, ${this.downbeats.length} downbeats, ${this.duration}s duration`);
+            console.log(`🎵 Waveform peaks sample:`, this.waveformData.peaks?.slice(0, 5));
+            console.log(`🥁 Downbeats sample:`, this.downbeats.slice(0, 5));
             
             // Render the visualization
             this.render();
             
             return true;
         } else {
-            console.error('❌ Invalid visualization data structure');
+            console.error('❌ Invalid visualization data structure:', data);
             return false;
         }
     }
@@ -99,11 +102,20 @@ class WaveformCanvas {
      * Main rendering function
      */
     render() {
-        if (!this.waveformData) return;
+        if (!this.waveformData) {
+            console.log('⚠️ No waveform data to render');
+            return;
+        }
+        
+        console.log('🎨 Rendering waveform...');
+        
+        // Get canvas dimensions (adjusted for DPR)
+        const width = this.canvas.width / (window.devicePixelRatio || 1);
+        const height = this.canvas.height / (window.devicePixelRatio || 1);
         
         // Clear canvas
         this.ctx.fillStyle = this.options.backgroundColor;
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.fillRect(0, 0, width, height);
         
         // Draw grid
         this.drawGrid();
@@ -119,6 +131,8 @@ class WaveformCanvas {
         
         // Draw time labels
         this.drawTimeLabels();
+        
+        console.log('✅ Rendering complete');
     }
     
     drawGrid() {

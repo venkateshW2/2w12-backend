@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2W12 Audio Analysis - Debug</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="max-w-6xl mx-auto p-6">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-900 mb-2">
+                2W12 <span class="text-gray-600">Audio Analysis</span>
+                <span class="bg-gray-800 text-white px-2 py-1 rounded text-sm font-mono ml-2">DEBUG</span>
+            </h1>
+            <p class="text-gray-600">Clean visualization with waveform debugging</p>
+        </div>
+
+        <!-- Upload Card -->
+        <div id="uploadCard" class="bg-white rounded-lg shadow-md border-2 border-dashed border-gray-300 p-12 mb-8 text-center cursor-pointer hover:border-gray-400 transition-colors">
+            <div class="text-4xl mb-4">🎵</div>
+            <div class="text-lg font-medium text-gray-900 mb-2">Drop your audio file here or click to browse</div>
+            <div class="text-sm text-gray-500">Supports MP3, WAV, FLAC • Maximum 10 minutes</div>
+            <input type="file" id="fileInput" accept="audio/*" class="hidden">
+        </div>
+
+        <!-- Progress Section -->
+        <div id="progressSection" class="bg-white rounded-lg shadow-md p-6 mb-8 hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Processing</h3>
+                <span id="progressTime" class="text-sm font-mono text-gray-600">0.0s</span>
+            </div>
+            
+            <div class="w-full bg-gray-200 rounded-full h-2 mb-4">
+                <div id="progressFill" class="bg-gray-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+            
+            <div id="progressStatus" class="text-sm text-gray-600 bg-gray-100 rounded p-3">Ready to analyze...</div>
+        </div>
+
+        <!-- Debug Console -->
+        <div id="debugConsole" class="bg-gray-900 text-green-400 rounded-lg p-4 mb-8 font-mono text-sm max-h-40 overflow-y-auto hidden">
+            <div class="text-green-300 mb-2">🐛 Debug Console:</div>
+            <div id="debugLog"></div>
+        </div>
+
+        <!-- Visualization Container -->
+        <div id="visualizationContainer" class="hidden">
+            <!-- Waveform Section -->
+            <div class="bg-white rounded-lg shadow-md mb-8">
+                <div class="border-b border-gray-200 p-6">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-lg font-semibold text-gray-900">🎨 Waveform Visualization</h3>
+                        <span id="performanceBadge" class="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-sm font-mono">0.0x</span>
+                    </div>
+                </div>
+                
+                <div class="p-6">
+                    <canvas id="waveformCanvas" class="w-full border border-gray-200 rounded cursor-crosshair bg-white" style="height: 200px;"></canvas>
+                    
+                    <div class="flex justify-between items-center mt-4 pt-4 border-t border-gray-200">
+                        <div class="flex gap-6 text-sm font-mono text-gray-600">
+                            <span id="viz-duration">0s</span>
+                            <span id="viz-downbeats">0 downbeats</span>
+                            <span id="viz-waveform-points">0 points</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="exportWaveform()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded text-sm">Export PNG</button>
+                            <button onclick="resetVisualization()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded text-sm">Reset</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Metrics Card -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Analysis Results</h3>
+                    <div id="metricCards" class="grid grid-cols-2 gap-4">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Technical Details Card -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Technical Details</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Pipeline</span>
+                            <span id="tech-pipeline" class="font-mono text-sm">AudioFlux</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">GPU Acceleration</span>
+                            <span id="tech-gpu" class="font-mono text-sm">Checking...</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Downbeats</span>
+                            <span id="tech-madmom" class="font-mono text-sm">Madmom</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Sample Rate</span>
+                            <span id="tech-sample-rate" class="font-mono text-sm">22kHz</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simple debug logging
+        function debugLog(message) {
+            const console = document.getElementById('debugConsole');
+            const log = document.getElementById('debugLog');
+            console.classList.remove('hidden');
+            log.innerHTML += '<div>' + new Date().toLocaleTimeString() + ' - ' + message + '</div>';
+            log.scrollTop = log.scrollHeight;
+            console.log(message);
+        }
+
+        // Simple Canvas Waveform Class
+        class SimpleWaveform {
+            constructor(canvasId) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.waveformData = null;
+                this.downbeats = [];
+                this.duration = 0;
+                
+                this.setupCanvas();
+                debugLog('🎨 SimpleWaveform initialized');
+            }
+            
+            setupCanvas() {
+                const rect = this.canvas.getBoundingClientRect();
+                this.canvas.width = rect.width;
+                this.canvas.height = 200;
+                debugLog(`📐 Canvas: ${this.canvas.width}x${this.canvas.height}`);
+            }
+            
+            loadData(data) {
+                debugLog('📊 Loading visualization data...');
+                
+                if (data.visualization && data.visualization.waveform) {
+                    this.waveformData = data.visualization.waveform;
+                    this.downbeats = data.visualization.downbeats?.times || [];
+                    this.duration = this.waveformData.duration || 0;
+                    
+                    debugLog(`✅ Loaded: ${this.waveformData.peaks?.length || 0} peaks, ${this.downbeats.length} downbeats`);
+                    debugLog(`🎵 Sample peaks: ${JSON.stringify(this.waveformData.peaks?.slice(0, 3))}`);
+                    debugLog(`🥁 Sample downbeats: ${JSON.stringify(this.downbeats.slice(0, 3))}`);
+                    
+                    this.render();
+                    return true;
+                } else {
+                    debugLog('❌ Invalid data structure');
+                    console.error('Data structure:', data);
+                    return false;
+                }
+            }
+            
+            render() {
+                if (!this.waveformData || !this.waveformData.peaks) {
+                    debugLog('⚠️ No waveform data to render');
+                    return;
+                }
+                
+                debugLog('🎨 Rendering...');
+                
+                const width = this.canvas.width;
+                const height = this.canvas.height;
+                const centerY = height / 2;
+                
+                // Clear canvas
+                this.ctx.fillStyle = '#ffffff';
+                this.ctx.fillRect(0, 0, width, height);
+                
+                // Draw center line
+                this.ctx.strokeStyle = '#e5e7eb';
+                this.ctx.lineWidth = 1;
+                this.ctx.beginPath();
+                this.ctx.moveTo(0, centerY);
+                this.ctx.lineTo(width, centerY);
+                this.ctx.stroke();
+                
+                // Draw waveform
+                const peaks = this.waveformData.peaks;
+                const valleys = this.waveformData.valleys || peaks.map(p => -p);
+                
+                if (peaks.length > 0) {
+                    this.ctx.strokeStyle = '#4b5563';
+                    this.ctx.lineWidth = 1;
+                    this.ctx.fillStyle = '#9ca3af20';
+                    
+                    this.ctx.beginPath();
+                    
+                    // Draw top line (peaks)
+                    for (let i = 0; i < peaks.length; i++) {
+                        const x = (i / peaks.length) * width;
+                        const y = centerY - (peaks[i] * centerY * 0.8);
+                        
+                        if (i === 0) {
+                            this.ctx.moveTo(x, y);
+                        } else {
+                            this.ctx.lineTo(x, y);
+                        }
+                    }
+                    
+                    // Draw bottom line (valleys)
+                    for (let i = peaks.length - 1; i >= 0; i--) {
+                        const x = (i / peaks.length) * width;
+                        const y = centerY - (valleys[i] * centerY * 0.8);
+                        this.ctx.lineTo(x, y);
+                    }
+                    
+                    this.ctx.closePath();
+                    this.ctx.fill();
+                    this.ctx.stroke();
+                    
+                    debugLog(`✅ Drew waveform: ${peaks.length} points`);
+                }
+                
+                // Draw downbeats
+                if (this.downbeats.length > 0 && this.duration > 0) {
+                    this.ctx.strokeStyle = '#ef4444';
+                    this.ctx.lineWidth = 2;
+                    this.ctx.globalAlpha = 0.7;
+                    
+                    this.downbeats.forEach((beatTime, index) => {
+                        const x = (beatTime / this.duration) * width;
+                        
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(x, 0);
+                        this.ctx.lineTo(x, height);
+                        this.ctx.stroke();
+                        
+                        // Beat number
+                        if (index % 4 === 0) {
+                            this.ctx.fillStyle = '#ef4444';
+                            this.ctx.font = '10px JetBrains Mono';
+                            this.ctx.fillText(`${index + 1}`, x + 2, 15);
+                        }
+                    });
+                    
+                    this.ctx.globalAlpha = 1;
+                    debugLog(`✅ Drew downbeats: ${this.downbeats.length} beats`);
+                }
+            }
+        }
+
+        // Initialize
+        let waveform;
+        let startTime;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            waveform = new SimpleWaveform('waveformCanvas');
+            
+            // Setup file upload
+            document.getElementById('uploadCard').onclick = () => document.getElementById('fileInput').click();
+            document.getElementById('fileInput').onchange = handleFileSelect;
+            
+            debugLog('🚀 Debug interface ready');
+        });
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                analyzeFile(file);
+            }
+        }
+
+        async function analyzeFile(file) {
+            debugLog(`🎵 Analyzing: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+            
+            // Show progress
+            document.getElementById('progressSection').classList.remove('hidden');
+            startTime = Date.now();
+            
+            const timerInterval = setInterval(() => {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                document.getElementById('progressTime').textContent = elapsed + 's';
+            }, 100);
+
+            try {
+                // Create form data
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                updateProgress(20, 'Uploading file...');
+                
+                // Make API request
+                const response = await fetch('/api/audio/analyze-visualization', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                updateProgress(60, 'Processing with AudioFlux...');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                updateProgress(100, 'Complete!');
+                
+                debugLog('✅ Analysis complete');
+                console.log('Full result:', result);
+                
+                // Load visualization
+                if (waveform.loadData(result)) {
+                    showVisualization(result);
+                } else {
+                    debugLog('❌ Failed to load visualization');
+                }
+                
+            } catch (error) {
+                debugLog(`❌ Error: ${error.message}`);
+                updateProgress(0, `Error: ${error.message}`);
+            } finally {
+                clearInterval(timerInterval);
+            }
+        }
+
+        function updateProgress(percentage, message) {
+            document.getElementById('progressFill').style.width = percentage + '%';
+            document.getElementById('progressStatus').textContent = message;
+        }
+
+        function showVisualization(result) {
+            document.getElementById('visualizationContainer').classList.remove('hidden');
+            
+            const analysis = result.analysis;
+            const viz = result.visualization;
+            
+            // Update performance badge
+            if (analysis.response_time && viz.waveform.duration) {
+                const factor = (viz.waveform.duration / analysis.response_time).toFixed(1);
+                document.getElementById('performanceBadge').textContent = `${factor}x REALTIME`;
+            }
+            
+            // Update metadata
+            document.getElementById('viz-duration').textContent = `${viz.waveform.duration}s`;
+            document.getElementById('viz-downbeats').textContent = `${viz.downbeats.count} downbeats`;
+            document.getElementById('viz-waveform-points').textContent = `${viz.waveform.width} points`;
+            
+            // Update metrics
+            const metrics = [
+                { label: 'Key', value: analysis.ml_key || 'N/A' },
+                { label: 'Tempo', value: analysis.ml_tempo || 'N/A' },
+                { label: 'Danceability', value: analysis.ml_danceability ? `${(analysis.ml_danceability * 100).toFixed(0)}%` : 'N/A' },
+                { label: 'Downbeats', value: analysis.madmom_downbeat_count || 'N/A' }
+            ];
+            
+            document.getElementById('metricCards').innerHTML = metrics.map(m => `
+                <div class="text-center p-3 bg-gray-50 rounded">
+                    <div class="text-lg font-bold text-gray-900">${m.value}</div>
+                    <div class="text-xs text-gray-600 uppercase">${m.label}</div>
+                </div>
+            `).join('');
+            
+            debugLog('✅ Visualization loaded');
+        }
+
+        function exportWaveform() {
+            if (waveform && waveform.canvas) {
+                const link = document.createElement('a');
+                link.download = 'waveform.png';
+                link.href = waveform.canvas.toDataURL();
+                link.click();
+                debugLog('📸 Exported waveform as PNG');
+            }
+        }
+
+        function resetVisualization() {
+            document.getElementById('visualizationContainer').classList.add('hidden');
+            document.getElementById('progressSection').classList.add('hidden');
+            waveform.waveformData = null;
+            waveform.downbeats = [];
+            waveform.ctx.clearRect(0, 0, waveform.canvas.width, waveform.canvas.height);
+            debugLog('🔄 Reset visualization');
+        }
+    </script>
+</body>
+</html>
