@@ -12,25 +12,45 @@ class SoundToolsDatabase:
     """
     Redis-based caching and data management for 2W12 Sound Tools
     Handles analysis caching, research data, and performance tracking
+    Falls back to no-cache mode if Redis unavailable
     """
     
     def __init__(self):
-        self.redis_client = redis.Redis(
-            host='redis',  # Docker service name
-            port=6379,
-            db=0,
-            decode_responses=True,
-            socket_connect_timeout=5,
-            socket_timeout=5
-        )
+        self.redis_available = False
+        self.redis_client = None
         
-        # Test connection on startup
-        self._test_connection()
+        # Try multiple Redis configurations
+        redis_configs = [
+            {'host': 'localhost', 'port': 6379},  # Native local Redis
+            {'host': '127.0.0.1', 'port': 6379},  # Alternative local
+            {'host': 'redis', 'port': 6379},      # Docker service name
+        ]
+        
+        for config in redis_configs:
+            try:
+                self.redis_client = redis.Redis(
+                    host=config['host'],
+                    port=config['port'],
+                    db=0,
+                    decode_responses=True,
+                    socket_connect_timeout=2,
+                    socket_timeout=2
+                )
+                self._test_connection()
+                break
+            except Exception as e:
+                logger.warning(f"⚠️ Redis connection failed for {config['host']}:{config['port']}: {e}")
+                continue
+        
+        if not self.redis_available:
+            logger.warning("⚠️ Redis not available - running in no-cache mode")
+            logger.info("💡 To enable caching, install and start Redis: sudo systemctl start redis")
         
     def _test_connection(self):
         """Test Redis connection and log status"""
         try:
             self.redis_client.ping()
+            self.redis_available = True
             logger.info("✅ Redis connection successful")
             
             # Initialize stats if not exist
@@ -41,8 +61,8 @@ class SoundToolsDatabase:
                 logger.info("🆕 Initialized cache statistics")
                 
         except Exception as e:
-            logger.error(f"❌ Redis connection failed: {e}")
-            raise ConnectionError(f"Cannot connect to Redis: {e}")
+            self.redis_available = False
+            raise e  # Let the outer try-catch handle it
     
     def create_file_fingerprint(self, file_content: bytes, filename: str) -> str:
         """
@@ -68,6 +88,10 @@ class SoundToolsDatabase:
         Returns:
             bool: True if cached successfully
         """
+        if not self.redis_available:
+            logger.debug(f"⚠️ Redis not available - skipping cache store for {fingerprint[:8]}")
+            return False
+            
         try:
             cache_key = f"analysis:{fingerprint}"
             
@@ -108,6 +132,10 @@ class SoundToolsDatabase:
         Returns:
             Dict or None: Cached analysis data if found
         """
+        if not self.redis_available:
+            logger.debug(f"⚠️ Redis not available - cache miss for {fingerprint[:8]}")
+            return None
+            
         try:
             cache_key = f"analysis:{fingerprint}"
             data = self.redis_client.get(cache_key)
@@ -125,7 +153,8 @@ class SoundToolsDatabase:
                 
         except Exception as e:
             logger.error(f"❌ Cache retrieval failed for {fingerprint[:8]}: {e}")
-            self.redis_client.incr("stats:cache_misses")
+            if self.redis_available:
+                self.redis_client.incr("stats:cache_misses")
             return None
     
     def store_research_data(self, fingerprint: str, ml_data: Dict, validation_data: Dict = None) -> bool:
@@ -138,6 +167,10 @@ class SoundToolsDatabase:
             ml_data: ML analysis results
             validation_data: Ground truth data for comparison
         """
+        if not self.redis_available:
+            logger.debug(f"⚠️ Redis not available - skipping research data store")
+            return False
+            
         try:
             research_key = f"research:{fingerprint}"
             
@@ -170,6 +203,24 @@ class SoundToolsDatabase:
     
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get comprehensive cache performance statistics"""
+        if not self.redis_available:
+            return {
+                "performance": {
+                    "cache_hits": 0,
+                    "cache_misses": 0,
+                    "cache_stores": 0,
+                    "hit_rate_percent": 0.0,
+                    "total_requests": 0
+                },
+                "storage": {
+                    "memory_used_mb": 0.0,
+                    "cached_analyses": 0,
+                    "research_records": 0
+                },
+                "status": "redis_unavailable",
+                "message": "Redis not available - caching disabled"
+            }
+            
         try:
             hits = int(self.redis_client.get("stats:cache_hits") or 0)
             misses = int(self.redis_client.get("stats:cache_misses") or 0)
@@ -208,6 +259,14 @@ class SoundToolsDatabase:
     
     def cleanup_expired_data(self) -> Dict[str, int]:
         """Manual cleanup of expired data (for maintenance)"""
+        if not self.redis_available:
+            return {
+                "deleted_analysis": 0,
+                "deleted_research": 0,
+                "status": "redis_unavailable",
+                "message": "Redis not available - no cleanup needed"
+            }
+            
         try:
             # This is automatically handled by Redis TTL, but we can force cleanup
             deleted_analysis = 0

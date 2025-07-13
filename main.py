@@ -76,11 +76,11 @@ app = FastAPI(
 
 gpu_status = check_gpu_availability()
 
-# Container-friendly directory configuration
-UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/app/uploads")
-TEMP_DIR = os.getenv("TEMP_DIR", "/app/temp")
-LOG_DIR = os.getenv("LOG_DIR", "/app/logs")
-STATIC_DIR = os.getenv("STATIC_DIR", "/app/static")
+# Directory configuration (native-friendly with Docker fallback)
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
+TEMP_DIR = os.getenv("TEMP_DIR", "./temp")
+LOG_DIR = os.getenv("LOG_DIR", "./logs")
+STATIC_DIR = os.getenv("STATIC_DIR", "./static")
 
 # Ensure directories exist
 Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
@@ -109,6 +109,16 @@ if visualization_available:
 if streaming_available:
     app.include_router(streaming_router)
     logger.info("✅ Streaming router included")
+
+# Serve the streaming test interface
+@app.get("/streaming", response_class=HTMLResponse)
+async def streaming_interface():
+    """Serve the Option A streaming test interface"""
+    try:
+        with open("streaming.html", "r") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        return HTMLResponse(content="<h1>Streaming interface not found</h1>", status_code=404)
 
 # === DAY 6: ENHANCED ENDPOINTS (NOW WORKING) ===
 

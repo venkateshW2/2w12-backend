@@ -1,0 +1,7 @@
+Collecting scipy
+  Downloading scipy-1.15.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (61 kB)
+Requirement already satisfied: numpy<2.5,>=1.23.5 in /mnt/2w12-data/miniconda3/envs/2w12-backend/lib/python3.10/site-packages (from scipy) (1.26.4)
+Downloading scipy-1.15.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (37.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 37.7/37.7 MB 49.0 MB/s eta 0:00:00
+Installing collected packages: scipy
+Successfully installed scipy-1.15.3

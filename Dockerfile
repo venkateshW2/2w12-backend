@@ -45,7 +45,7 @@ RUN pip install --no-cache-dir -r requirements.txt || \
      pip install --no-cache-dir numpy scipy && \
      pip install --no-cache-dir -r requirements.txt --force-reinstall)
 
-# Copy application code
+# Copy application code (excluding files in .dockerignore)
 COPY . .
 
 # Create directories

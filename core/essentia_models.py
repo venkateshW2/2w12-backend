@@ -23,13 +23,18 @@ class EssentiaModelManager:
         self.models_loaded = False
         self.available_models = {}
         self.model_paths = {
-            # Use specialized models for each task - GPU accelerated
-            "pitch_detection": "models/Crepe Large Model.pb",  # CREPE for pitch/key detection  
-            "tempo_classification": "models/Danceability Audioset Yamnet.pb",  # YamNet for tempo/rhythm
-            "genre_classification": "models/Genre Discogs 400 Model.pb",
-            "danceability": "models/Danceability Discogs Effnet.pb", 
-            "audio_features": "models/audioset-vggish-3.pb",  # VGGish for general audio features
-            "voice_instrumental": "models/Voice Instrumental Model.pb"
+            # WORKING ML MODELS:
+            "pitch_detection": "models/Crepe Large Model.pb",  # CREPE for key detection (51MB - WORKING)
+            "genre_classification": "models/Genre Discogs 400 Model.pb",  # 1.25MB - WORKING  
+            "danceability": "models/Danceability Discogs Effnet.pb",  # 53KB - WORKING
+            "audio_features": "models/audioset-vggish-3.pb",  # VGGish 1.86MB - WORKING
+            
+            # TEMPO MODEL (DOWNLOADED):
+            "tempo_cnn": "models/deeptemp-k16-3.pb",  # Downloaded tempo model
+            
+            # Disabled empty models:
+            # "tempo_classification": "models/Danceability Audioset Yamnet.pb",  # EMPTY - DISABLED
+            # "voice_instrumental": "models/Voice Instrumental Model.pb"  # EMPTY - DISABLED
         }
         
         self._load_available_models()
@@ -85,8 +90,19 @@ class EssentiaModelManager:
                 except Exception as e:
                     logger.warning(f"⚠️ Danceability model failed to load: {e}")
             
-            # For Week 2, we'll start with key detection and genre classification
-            # Additional models can be added incrementally
+            # Tempo CNN Model (DeepTemp K16) - TESTING different preprocessing approaches
+            if self._model_exists("tempo_cnn"):
+                try:
+                    self.available_models["tempo_cnn"] = es.TensorflowPredict(
+                        graphFilename=self.model_paths["tempo_cnn"],
+                        inputs=["input"],
+                        outputs=["output"]
+                    )
+                    logger.info("✅ Tempo CNN model loaded")
+                except Exception as e:
+                    logger.warning(f"⚠️ Tempo CNN model failed to load: {e}")
+            else:
+                logger.info("ℹ️ Tempo CNN model disabled - using Madmom tempo detection instead")
             
             self.models_loaded = len(self.available_models) > 0
             
@@ -218,9 +234,26 @@ class EssentiaModelManager:
             # Prepare audio for Essentia
             audio_vector = y.astype(np.float32)
             
-            # Extract danceability features with error handling
+            # Extract danceability features with cppPool error handling
             try:
                 features = self.available_models["danceability"](audio_vector)
+            except AttributeError as attr_error:
+                if 'cppPool' in str(attr_error):
+                    logger.warning(f"⚠️ cppPool error detected - using fallback danceability estimation")
+                    # Fallback: estimate danceability from audio energy patterns
+                    energy = np.mean(np.abs(audio_vector))
+                    variance = np.var(audio_vector)
+                    # Simple heuristic: high energy + variance = more danceable
+                    danceability_score = min(1.0, (energy * 10 + variance * 5))
+                    return {
+                        "ml_danceability": round(danceability_score, 3),
+                        "ml_danceability_confidence": 0.5,  # Lower confidence for fallback
+                        "ml_danceability_class": "danceable" if danceability_score > 0.5 else "not_danceable",
+                        "ml_model": "fallback_energy_heuristic",
+                        "cppPool_error_handled": True
+                    }
+                else:
+                    raise attr_error
             except Exception as model_error:
                 logger.warning(f"⚠️ Danceability model execution failed: {model_error}")
                 return {"ml_danceability": 0.0, "ml_danceability_confidence": 0.0}
@@ -277,67 +310,156 @@ class EssentiaModelManager:
             return {"ml_danceability": 0.0, "ml_danceability_confidence": 0.0}
     
     def analyze_tempo_ml(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
-        """ML-based tempo detection using YamNet and VGGish"""
+        """ML-based tempo detection - PRIORITY #1 FIX: Make Essentia do TWO jobs efficiently"""
         
-        if "tempo_classification" not in self.available_models and "audio_features" not in self.available_models:
-            logger.warning("⚠️  No tempo detection models available")
-            return {"ml_tempo": 0.0, "ml_tempo_confidence": 0.0}
+        # TRY TEMPO CNN FIRST with different preprocessing approaches
+        if "tempo_cnn" in self.available_models:
+            logger.info("🎵 Attempting Tempo CNN with cppPool error fixes...")
+            
+            try:
+                # APPROACH 1: Direct Essentia preprocessing (no librosa)
+                logger.info("🔧 Trying Approach 1: Direct Essentia preprocessing")
+                
+                # Use Essentia for all preprocessing to avoid librosa cppPool conflicts
+                import essentia.standard as es
+                
+                # Method 1: Try with Essentia's own mel-spectrogram
+                windowing = es.Windowing(type='hann')
+                fft = es.FFT()
+                mel_bands = es.MelBands(numberBands=80, sampleRate=sr)
+                
+                # Process in smaller chunks to avoid memory issues
+                chunk_size = min(len(y), sr * 10)  # Max 10 seconds at a time
+                audio_chunk = y[:chunk_size].astype(np.float32)
+                
+                # Create mel spectrogram using Essentia
+                mel_frames = []
+                hop_size = 512
+                for i in range(0, len(audio_chunk) - 1024, hop_size):
+                    frame = audio_chunk[i:i+1024]
+                    if len(frame) == 1024:
+                        windowed = windowing(frame)
+                        fft_result = fft(windowed)
+                        mel_frame = mel_bands(fft_result)
+                        mel_frames.append(mel_frame)
+                
+                if len(mel_frames) > 0:
+                    mel_spectrogram = np.array(mel_frames).T  # Shape: (80, time_frames)
+                    
+                    # Normalize for CNN
+                    mel_normalized = (mel_spectrogram - np.mean(mel_spectrogram)) / (np.std(mel_spectrogram) + 1e-8)
+                    
+                    # Try different input shapes for the CNN
+                    shapes_to_try = [
+                        mel_normalized,  # Raw mel spectrogram
+                        mel_normalized.T,  # Transposed
+                        mel_normalized[np.newaxis, :, :],  # Add batch dimension
+                        mel_normalized[:, :, np.newaxis],  # Add channel dimension
+                    ]
+                    
+                    for i, input_tensor in enumerate(shapes_to_try):
+                        try:
+                            logger.info(f"🔧 Trying input shape {i+1}: {input_tensor.shape}")
+                            tempo_prediction = self.available_models["tempo_cnn"](input_tensor)
+                            
+                            # Process CNN output
+                            if isinstance(tempo_prediction, (list, tuple)) and len(tempo_prediction) > 0:
+                                tempo_probs = tempo_prediction[0]
+                            else:
+                                tempo_probs = tempo_prediction
+                            
+                            if hasattr(tempo_probs, 'shape') and len(tempo_probs.shape) > 0:
+                                # DeepTemp K16 outputs tempo class probabilities
+                                # Classes typically represent BPM ranges from 30-300
+                                tempo_classes = np.arange(30, 301, 1)  # 1 BPM resolution
+                                
+                                if len(tempo_probs) == len(tempo_classes):
+                                    predicted_tempo_idx = np.argmax(tempo_probs)
+                                    predicted_tempo = float(tempo_classes[predicted_tempo_idx])
+                                    confidence = float(np.max(tempo_probs))
+                                    
+                                    logger.info(f"✅ Tempo CNN SUCCESS with shape {i+1}!")
+                                    return {
+                                        "ml_tempo": round(predicted_tempo, 1),
+                                        "ml_tempo_confidence": round(confidence, 3),
+                                        "ml_model": "essentia_deeptemp_k16_cnn",
+                                        "ml_tempo_method": f"cnn_essentia_preprocessing_approach_{i+1}",
+                                        "ml_input_shape": str(input_tensor.shape),
+                                        "ml_preprocessing": "essentia_mel_spectrogram",
+                                        "cppPool_error_fixed": True
+                                    }
+                                    
+                        except Exception as shape_error:
+                            logger.warning(f"⚠️ Shape {i+1} failed: {shape_error}")
+                            continue
+                
+                logger.warning("🔧 All Essentia preprocessing approaches failed, trying fallback...")
+                
+            except Exception as cnn_error:
+                logger.warning(f"⚠️ Tempo CNN approaches failed: {cnn_error}")
+        
+        # FALLBACK: Use Essentia RhythmExtractor2013 (working alternative)
+        logger.info("🎵 Using Essentia RhythmExtractor2013 fallback")
         
         try:
-            # Use VGGish for general audio features if available
-            if "audio_features" in self.available_models:
-                # Prepare audio for VGGish
-                audio_vector = y.astype(np.float32)
-                
-                # VGGish processes audio and returns feature embeddings
-                features = self.available_models["audio_features"](audio_vector)
-                
-                # Handle different output formats
-                if isinstance(features, np.ndarray):
-                    features = features.flatten()
-                elif hasattr(features, '__len__') and len(features) > 0:
-                    # Handle tuple or list outputs
-                    features = np.array(features[0]) if isinstance(features[0], (list, np.ndarray)) else np.array(features)
-                else:
-                    features = np.array([0.5])  # Default fallback
-                
-                # Map VGGish features to tempo estimation
-                # This is a heuristic approach - real implementation would need training
-                if len(features) > 0:
-                    # Use feature energy and spectral characteristics for tempo estimation
-                    feature_energy = np.mean(np.abs(features))
-                    feature_variance = np.var(features) if len(features) > 1 else 0.1
-                    
-                    # Map to tempo ranges based on energy patterns
-                    # High energy + high variance = fast tempo
-                    # Low energy + low variance = slow tempo
-                    base_tempo = 120.0
-                    energy_factor = min(2.0, max(0.1, feature_energy * 100))  # Scale factor
-                    variance_factor = min(1.5, max(0.1, feature_variance * 50))
-                    
-                    estimated_tempo = base_tempo * (1 + (energy_factor - 1) * variance_factor)
-                    estimated_tempo = max(60.0, min(200.0, estimated_tempo))  # Clamp to reasonable range
-                    
-                    confidence = min(1.0, (energy_factor + variance_factor) / 3.0)
-                    
-                    return {
-                        "ml_tempo": round(float(estimated_tempo), 1),
-                        "ml_tempo_confidence": round(confidence, 3),
-                        "ml_model": "essentia_vggish_tempo",
-                        "ml_feature_energy": round(float(feature_energy), 4),
-                        "ml_feature_variance": round(float(feature_variance), 4)
-                    }
+            import essentia.standard as es
             
-            # Fallback - return neutral values
-            return {
-                "ml_tempo": 120.0,
-                "ml_tempo_confidence": 0.3,
-                "ml_model": "essentia_fallback"
-            }
+            # Use Essentia's working rhythm analysis
+            rhythm_extractor = es.RhythmExtractor2013(method="multifeature")
+            tempo, beats, beats_confidence, _, beats_intervals = rhythm_extractor(y)
+            
+            if tempo > 0 and beats_confidence > 0:
+                # Calculate tempo confidence based on beat consistency
+                if len(beats_intervals) > 1:
+                    interval_std = np.std(beats_intervals)
+                    tempo_confidence = max(0.1, min(0.95, 1.0 / (1.0 + interval_std)))
+                else:
+                    tempo_confidence = beats_confidence
+                
+                # Alternative tempo estimates
+                tempo_estimates = []
+                if len(beats) > 1:
+                    # Calculate from beat intervals
+                    mean_interval = np.mean(np.diff(beats))
+                    if mean_interval > 0:
+                        beat_tempo = 60.0 / mean_interval
+                        tempo_estimates.append(beat_tempo)
+                        # Double and half tempo candidates
+                        tempo_estimates.extend([beat_tempo * 2, beat_tempo / 2])
+                
+                # Add the main tempo
+                tempo_estimates.insert(0, float(tempo))
+                
+                # Remove duplicates and sort by proximity to main tempo
+                tempo_estimates = list(set([t for t in tempo_estimates if 60 <= t <= 200]))
+                tempo_estimates.sort(key=lambda x: abs(x - tempo))
+                
+                return {
+                    "ml_tempo": round(float(tempo), 1),
+                    "ml_tempo_confidence": round(tempo_confidence, 3),
+                    "ml_model": "essentia_rhythm_extractor_2013_fallback",
+                    "ml_tempo_method": "multifeature_rhythm_analysis",
+                    "ml_tempo_candidates": [round(t, 1) for t in tempo_estimates[:3]],
+                    "ml_beats_detected": len(beats),
+                    "ml_beats_confidence": round(beats_confidence, 3),
+                    "ml_tempo_range": "60_200_bpm",
+                    "tempo_cnn_attempted": True
+                }
+            else:
+                return {
+                    "ml_tempo": 120.0,
+                    "ml_tempo_confidence": 0.0,
+                    "ml_model": "essentia_rhythm_extractor_fallback"
+                }
             
         except Exception as e:
             logger.error(f"❌ ML tempo detection failed: {e}")
-            return {"ml_tempo": 0.0, "ml_tempo_confidence": 0.0}
+            return {
+                "ml_tempo": 0.0, 
+                "ml_tempo_confidence": 0.0,
+                "ml_tempo_error": str(e),
+                "ml_error_type": type(e).__name__
+            }
     
     def _fallback_key_detection(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
         """Fallback key detection when ML model unavailable"""
@@ -461,9 +583,26 @@ class EssentiaModelManager:
             # Process each chunk (optimize by reusing GPU context)
             for audio_vector in batch_audio:
                 try:
-                    # Use the robust model execution from main function
+                    # Use the robust model execution with cppPool error handling
                     try:
                         features = self.available_models["danceability"](audio_vector)
+                    except AttributeError as attr_error:
+                        if 'cppPool' in str(attr_error):
+                            logger.warning(f"⚠️ Batch cppPool error - using fallback")
+                            # Fallback danceability estimation
+                            energy = np.mean(np.abs(audio_vector))
+                            variance = np.var(audio_vector)
+                            danceability_score = min(1.0, (energy * 10 + variance * 5))
+                            batch_results.append({
+                                "ml_danceability": round(danceability_score, 3),
+                                "ml_danceability_confidence": 0.5,
+                                "ml_danceability_class": "danceable" if danceability_score > 0.5 else "not_danceable",
+                                "ml_model": "fallback_energy_heuristic",
+                                "cppPool_error_handled": True
+                            })
+                            continue
+                        else:
+                            raise attr_error
                     except Exception as model_error:
                         logger.warning(f"⚠️ Batch danceability model execution failed: {model_error}")
                         batch_results.append({"ml_danceability": 0.0, "ml_danceability_confidence": 0.0})

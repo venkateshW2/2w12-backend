@@ -1,0 +1,83 @@
+# Audio test files
+*.wav
+*.mp3
+*.flac
+*.aiff
+
+# Docker backup files  
+*.tar
+%backup_dir%*
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs and temp files
+logs/
+*.log
+temp/
+temp_audio/
+uploads/
+
+# Documentation
+*.md
+AGGRESSIVE_CHUNKING_PLAN.md
+ESSENTIA_ML_SETUP.md
+PERFORMANCE_OPTIMIZATION_PLAN.md
+SESSION_SUMMARY.md
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Test files and scripts
+test_*.py
+*_test.py
+tests/
+test_files/
+*.ps1
+*.bat
+*.sh
+verify-backup*

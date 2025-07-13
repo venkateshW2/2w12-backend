@@ -1,0 +1,4 @@
+Requirement already satisfied: uvicorn in /mnt/2w12-data/miniconda3/envs/2w12-backend/lib/python3.10/site-packages (0.35.0)
+Requirement already satisfied: click>=7.0 in /mnt/2w12-data/miniconda3/envs/2w12-backend/lib/python3.10/site-packages (from uvicorn) (8.2.1)
+Requirement already satisfied: h11>=0.8 in /mnt/2w12-data/miniconda3/envs/2w12-backend/lib/python3.10/site-packages (from uvicorn) (0.16.0)
+Requirement already satisfied: typing-extensions>=4.0 in /mnt/2w12-data/miniconda3/envs/2w12-backend/lib/python3.10/site-packages (from uvicorn) (4.14.1)

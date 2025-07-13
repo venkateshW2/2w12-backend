@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>2W12 Option A Hybrid Audio Analysis</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; }
+        .upload-area { border: 2px dashed #ccc; padding: 40px; text-align: center; margin: 20px 0; }
+        .progress-container { margin: 20px 0; }
+        .progress-bar { width: 100%; height: 30px; background: #f0f0f0; border-radius: 15px; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #4CAF50, #45a049); transition: width 0.3s; }
+        .status { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .status.upload { background: #e3f2fd; }
+        .status.analyzing { background: #fff3e0; }
+        .status.complete { background: #e8f5e8; }
+        .status.error { background: #ffebee; }
+        .results { margin: 20px 0; padding: 20px; background: #f5f5f5; border-radius: 10px; }
+        .timeline { margin: 10px 0; }
+        .chunk { display: inline-block; width: 25px; height: 25px; margin: 3px; border-radius: 5px; background: #ddd; position: relative; }
+        .chunk.processing { background: #ff9800; animation: pulse 1s infinite; }
+        .chunk.complete { background: #4CAF50; }
+        .chunk:hover::after { content: attr(title); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 5px; border-radius: 3px; white-space: nowrap; z-index: 1000; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .architecture-info { background: linear-gradient(135deg, #e8f5e8, #f0f8ff); padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #4CAF50; }
+    </style>
+</head>
+<body>
+    <h1>🚀 2W12 Option A Hybrid Audio Analysis</h1>
+    <p>Test the revolutionary ML + AudioFlux + Madmom hybrid pipeline!</p>
+    
+    <div class="architecture-info">
+        <strong>🎯 Option A Architecture:</strong><br>
+        🧠 <strong>Essentia ML Models</strong> (CREPE Key + DeepTemp Tempo + Danceability)<br>
+        🥁 <strong>Madmom Downbeats</strong> (Timeline generation with RNN models)<br>
+        ⚡ <strong>AudioFlux Fast Features</strong> (5-12x speedup for transients/mel)<br>
+        🎵 <strong>Selective Librosa</strong> (Only energy + pitch complement)
+    </div>
+    
+    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+        <input type="file" id="fileInput" accept="audio/*" style="display: none;" onchange="startStreaming()">
+        <p>📁 Click to select audio file</p>
+        <small>Supports: MP3, WAV, FLAC, etc. • Test with short files for quick comparison</small>
+    </div>
+    
+    <div class="progress-container" id="progressContainer" style="display: none;">
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+        </div>
+        <div id="statusMessage" class="status">Ready...</div>
+        
+        <div class="timeline" id="timeline">
+            <strong>🔄 Option A Processing Timeline:</strong><br>
+            <div id="chunks"></div>
+        </div>
+    </div>
+    
+    <div class="results" id="results" style="display: none;">
+        <h3>📊 Option A Analysis Results</h3>
+        <div id="resultData"></div>
+    </div>
+
+    <script>
+        async function startStreaming() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) return;
+            
+            // Show progress container
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            
+            // Create timeline for 4 parallel processing components (Option A)
+            createTimeline(4);
+            
+            // Create form data
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const startTime = Date.now();
+            
+            try {
+                // Start streaming request
+                const response = await fetch('/api/audio/analyze-streaming', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                updateProgress(data, startTime);
+                            } catch (e) {
+                                console.log('Parse error:', e);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                updateProgress({
+                    status: 'error',
+                    message: `Connection error: ${error.message}`,
+                    progress: 0
+                }, startTime);
+            }
+        }
+        
+        function updateProgress(data, startTime) {
+            const progressFill = document.getElementById('progressFill');
+            const statusMessage = document.getElementById('statusMessage');
+            const results = document.getElementById('results');
+            const resultData = document.getElementById('resultData');
+            
+            // Update progress bar
+            if (data.progress !== undefined) {
+                progressFill.style.width = data.progress + '%';
+            }
+            
+            // Calculate elapsed time
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            
+            // Update status message
+            let className = 'status';
+            let message = '';
+            
+            switch (data.status) {
+                case 'upload_complete':
+                    className += ' upload';
+                    message = `✅ Uploaded: ${data.filename} (${data.size_mb} MB) - ${elapsed}s`;
+                    break;
+                case 'loading_audio':
+                    className += ' analyzing';
+                    message = `🔄 ${data.message} - ${elapsed}s`;
+                    break;
+                case 'analyzing':
+                    className += ' analyzing';
+                    message = `⚡ ${data.message} - ${elapsed}s`;
+                    updateTimelineProgress(data.progress);
+                    break;
+                case 'complete':
+                    className += ' complete';
+                    message = `🎉 Option A Analysis Complete! - ${elapsed}s total`;
+                    // Complete all timeline boxes
+                    completeAllTimelineBoxes();
+                    showResults(data.result, elapsed);
+                    break;
+                case 'error':
+                    className += ' error';
+                    message = `❌ ${data.message} - ${elapsed}s`;
+                    break;
+            }
+            
+            statusMessage.className = className;
+            statusMessage.textContent = message;
+        }
+        
+        function createTimeline(chunkCount) {
+            const chunksContainer = document.getElementById('chunks');
+            chunksContainer.innerHTML = '';
+            
+            const componentNames = [
+                '🧠 Essentia ML Models (CREPE Key + DeepTemp Tempo + Danceability)',
+                '🥁 Madmom Downbeat Detection (RNN Timeline Generation)',
+                '⚡ AudioFlux Fast Features (5-12x speedup transients/mel)',
+                '🎵 Librosa Selective (Energy + Pitch complement only)'
+            ];
+            
+            for (let i = 0; i < chunkCount; i++) {
+                const chunk = document.createElement('div');
+                chunk.className = 'chunk';
+                chunk.id = `chunk-${i}`;
+                chunk.title = componentNames[i] || `Component ${i + 1}`;
+                chunksContainer.appendChild(chunk);
+            }
+        }
+        
+        function updateTimelineProgress(progress) {
+            const chunks = document.querySelectorAll('.chunk');
+            const activeChunkIndex = Math.floor((progress / 100) * chunks.length);
+            
+            chunks.forEach((chunk, index) => {
+                if (index < activeChunkIndex) {
+                    chunk.className = 'chunk complete';
+                } else if (index === activeChunkIndex) {
+                    chunk.className = 'chunk processing';
+                } else {
+                    chunk.className = 'chunk';
+                }
+            });
+        }
+        
+        function completeAllTimelineBoxes() {
+            const chunks = document.querySelectorAll('.chunk');
+            chunks.forEach(chunk => {
+                chunk.className = 'chunk complete';
+            });
+        }
+        
+        function showResults(result, totalTime) {
+            const results = document.getElementById('results');
+            const resultData = document.getElementById('resultData');
+            
+            // Extract Option A Architecture specific data
+            const analysis = result.analysis || result;
+            const fileInfo = analysis.file_info || {};
+            
+            // ML Model results
+            const mlKey = analysis.ml_key || analysis.key || 'Unknown';
+            const mlMode = analysis.ml_mode || analysis.mode || '';
+            const keyInfo = `${mlKey} ${mlMode}`.trim();
+            const keyConfidence = analysis.ml_key_confidence || 'N/A';
+            const mlTempo = analysis.ml_tempo || 'Unknown';
+            const tempoConfidence = analysis.ml_tempo_confidence || 'N/A';
+            const danceability = analysis.ml_danceability !== undefined ? analysis.ml_danceability.toFixed(3) : 'N/A';
+            
+            // Madmom results
+            const downbeatCount = analysis.madmom_downbeat_count || 'N/A';
+            const meterDetection = analysis.madmom_meter_detection || 'N/A';
+            const timelineAvailable = analysis.madmom_timeline_available || false;
+            
+            // AudioFlux results
+            const audiofluxTransients = analysis.audioflux_transient_count || 'N/A';
+            const audiofluxComplete = analysis.audioflux_analysis_complete || false;
+            const audiofluxPerformance = analysis.audioflux_performance || 'fallback';
+            
+            // General info
+            const duration = fileInfo.analyzed_duration || analysis.duration || 'Unknown';
+            const processingTime = analysis.response_time || analysis.analysis_time || totalTime || 'Unknown';
+            const architecture = analysis.architecture || 'option_a_ml_hybrid';
+            const pipeline = analysis.analysis_pipeline || [];
+            
+            // Performance metrics
+            const realtimeRatio = duration && processingTime ? (parseFloat(processingTime) / parseFloat(duration)).toFixed(2) : 'N/A';
+            const speedDescription = realtimeRatio !== 'N/A' ? 
+                (realtimeRatio < 1 ? `${(1/realtimeRatio).toFixed(1)}x faster than realtime` : `${realtimeRatio}x slower than realtime`) : '';
+            
+            resultData.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div>
+                        <h4>🧠 ML Musical Analysis</h4>
+                        <p><strong>Key (CREPE):</strong> ${keyInfo} <small>(conf: ${keyConfidence})</small></p>
+                        <p><strong>Tempo (DeepTemp):</strong> ${mlTempo} BPM <small>(conf: ${tempoConfidence})</small></p>
+                        <p><strong>Danceability:</strong> ${danceability}</p>
+                        <p><strong>Duration:</strong> ${duration}s</p>
+                    </div>
+                    <div>
+                        <h4>🥁 Rhythm & Features</h4>
+                        <p><strong>Downbeats (Madmom):</strong> ${downbeatCount}</p>
+                        <p><strong>Meter:</strong> ${meterDetection}</p>
+                        <p><strong>Timeline Available:</strong> ${timelineAvailable ? '✅ Yes' : '❌ No'}</p>
+                        <p><strong>Transients (AudioFlux):</strong> ${audiofluxTransients}</p>
+                    </div>
+                </div>
+                <div style="margin-top: 15px; padding: 15px; background: linear-gradient(135deg, #f0f8ff, #e8f5e8); border-radius: 8px; border-left: 4px solid #4CAF50;">
+                    <h4>⚡ Option A Performance Metrics</h4>
+                    <p><strong>Processing Time:</strong> ${processingTime}s ${speedDescription ? `(${speedDescription})` : ''}</p>
+                    <p><strong>Pipeline:</strong> ${pipeline.join(' → ')}</p>
+                    <p><strong>Architecture:</strong> ${architecture}</p>
+                    <p><strong>AudioFlux Status:</strong> ${audiofluxComplete ? '✅ Active' : '⚠️ Fallback'} <small>(${audiofluxPerformance})</small></p>
+                    <p><strong>ML Models:</strong> ${analysis.ml_features_available !== false ? '✅ Loaded' : '❌ Unavailable'}</p>
+                    <p><strong>Madmom RNN:</strong> ${analysis.madmom_status === 'success' ? '✅ Working' : '⚠️ Limited'}</p>
+                </div>
+                <details style="margin-top: 20px;">
+                    <summary>📋 Complete Option A Analysis Data</summary>
+                    <pre style="background: #f0f0f0; padding: 15px; border-radius: 5px; overflow: auto; max-height: 400px; font-size: 12px;">${JSON.stringify(result, null, 2)}</pre>
+                </details>
+            `;
+            
+            results.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
