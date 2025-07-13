@@ -47,6 +47,92 @@ class AudioFluxProcessor:
             logger.error(f"❌ AudioFlux initialization failed: {e}")
             self.processors_ready = False
     
+    def extract_visualization_data(self, audio_data: np.ndarray, sr: int, target_width: int = 1920) -> Dict[str, Any]:
+        """
+        Extract lightweight visualization data using AudioFlux
+        Perfect for Canvas rendering without librosa overhead
+        """
+        try:
+            logger.info(f"📊 Extracting visualization data (target width: {target_width})")
+            
+            # Calculate duration
+            duration = len(audio_data) / sr
+            
+            # Downsample for Canvas rendering (1920px = common screen width)
+            if len(audio_data) > target_width:
+                chunk_size = len(audio_data) // target_width
+                
+                peaks = []
+                valleys = []
+                rms_values = []
+                
+                for i in range(0, len(audio_data), chunk_size):
+                    chunk = audio_data[i:i+chunk_size]
+                    if len(chunk) > 0:
+                        # Extract peaks and valleys for waveform
+                        peaks.append(float(np.max(chunk)))
+                        valleys.append(float(np.min(chunk)))
+                        
+                        # RMS for dynamic visualization
+                        rms = np.sqrt(np.mean(chunk**2))
+                        rms_values.append(float(rms))
+            else:
+                # For small files, use direct data
+                peaks = audio_data.tolist()
+                valleys = audio_data.tolist()
+                rms_values = [float(np.sqrt(np.mean(audio_data**2)))]
+            
+            # AudioFlux spectral features for enhanced visualization
+            try:
+                # Use AudioFlux for efficient spectral analysis
+                spectral_processor = af.Spectral(
+                    sample_rate=sr,
+                    fft_length=2048,
+                    hop_length=512
+                )
+                spectral_features = spectral_processor.spectral(audio_data)
+                
+                spectral_centroid = float(np.mean(spectral_features.get('centroid', [0]))) if spectral_features else 0.0
+                spectral_rolloff = float(np.mean(spectral_features.get('rolloff', [0]))) if spectral_features else 0.0
+                
+            except Exception as e:
+                logger.warning(f"⚠️ AudioFlux spectral analysis fallback: {e}")
+                spectral_centroid = 0.0
+                spectral_rolloff = 0.0
+            
+            visualization_data = {
+                "waveform": {
+                    "peaks": peaks,
+                    "valleys": valleys,
+                    "rms": rms_values,
+                    "width": len(peaks),
+                    "duration": duration,
+                    "sample_rate": sr
+                },
+                "spectral": {
+                    "centroid": spectral_centroid,
+                    "rolloff": spectral_rolloff
+                },
+                "metadata": {
+                    "original_length": len(audio_data),
+                    "downsampled_to": len(peaks),
+                    "compression_ratio": len(audio_data) / len(peaks) if len(peaks) > 0 else 1,
+                    "audioflux_version": "v0.1.9",
+                    "extraction_method": "audioflux_native"
+                }
+            }
+            
+            logger.info(f"✅ Visualization data extracted: {len(peaks)} points for {duration:.1f}s audio")
+            return visualization_data
+            
+        except Exception as e:
+            logger.error(f"❌ AudioFlux visualization extraction failed: {e}")
+            return {
+                "waveform": {"peaks": [], "valleys": [], "rms": [], "width": 0, "duration": 0, "sample_rate": sr},
+                "spectral": {"centroid": 0.0, "rolloff": 0.0},
+                "metadata": {"error": str(e), "extraction_method": "failed"}
+            }
+    
     def comprehensive_audioflux_analysis(self, y: np.ndarray) -> Dict[str, Any]:
         """Comprehensive AudioFlux analysis using v0.1.9 API"""
         try:

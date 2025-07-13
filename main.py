@@ -383,6 +383,106 @@ async def analyze_audio_streaming(file: UploadFile = File(...)):
         }
     )
 
+@app.post("/api/audio/analyze-visualization")
+async def analyze_audio_with_visualization(file: UploadFile = File(...)):
+    """
+    NB (New Beginning) - AudioFlux-based analysis with waveform visualization data
+    
+    Returns complete analysis + lightweight visualization data for Canvas rendering:
+    - Waveform peaks/valleys for timeline visualization
+    - Madmom downbeats superimposed on timeline
+    - Spectral features for enhanced visualization
+    - No librosa dependency - pure AudioFlux approach
+    """
+    
+    # File validation
+    if not file.filename.lower().endswith(('.wav', '.mp3', '.flac', '.m4a', '.aac')):
+        raise HTTPException(
+            status_code=400, 
+            detail="Unsupported audio format. Supported: WAV, MP3, FLAC, M4A, AAC"
+        )
+    
+    try:
+        # Read file content
+        file_content = await file.read()
+        file_size_mb = len(file_content) / 1024 / 1024
+        
+        # File size validation (150MB limit)
+        if file_size_mb > 150:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large: {file_size_mb:.1f}MB. Maximum size: 150MB"
+            )
+        
+        logger.info(f"🎨 NB Visualization analysis: {file.filename} ({file_size_mb:.1f}MB)")
+        
+        # Create temporary file for AudioFlux processing
+        import tempfile
+        import os
+        
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
+        tmp_file.write(file_content)
+        tmp_file.flush()
+        tmp_file.close()
+        tmp_file_path = tmp_file.name
+        
+        try:
+            # Use AudioFlux to read audio (no librosa!)
+            import audioflux as af
+            audio_data, sr = af.read(tmp_file_path)
+            logger.info(f"🎵 AudioFlux loaded: {len(audio_data)} samples at {sr}Hz")
+            
+            # Run standard analysis
+            result = enhanced_loader.analyze_with_caching(file_content, file.filename)
+            
+            # Extract visualization data using AudioFlux
+            audioflux_processor = enhanced_loader.get_audioflux_processor()
+            visualization_data = audioflux_processor.extract_visualization_data(audio_data, sr)
+            
+            # Integrate Madmom downbeats into visualization
+            madmom_downbeats = result.get('madmom_downbeat_times', [])
+            
+            # Enhanced response with visualization
+            return {
+                "success": True,
+                "filename": file.filename,
+                "file_size_mb": round(file_size_mb, 2),
+                "analysis": result,
+                "visualization": {
+                    **visualization_data,
+                    "downbeats": {
+                        "times": madmom_downbeats,
+                        "count": len(madmom_downbeats),
+                        "integration": "madmom_audioflux_hybrid"
+                    },
+                    "timeline": {
+                        "duration": visualization_data["waveform"]["duration"],
+                        "sample_rate": sr,
+                        "total_samples": len(audio_data),
+                        "visualization_points": visualization_data["waveform"]["width"]
+                    }
+                },
+                "api_version": "v3.1_visualization",
+                "features": {
+                    "audioflux_visualization": True,
+                    "madmom_downbeats": True,
+                    "canvas_ready": True,
+                    "lightweight_rendering": True
+                }
+            }
+            
+        finally:
+            # Cleanup temporary file
+            if os.path.exists(tmp_file_path):
+                os.unlink(tmp_file_path)
+        
+    except Exception as e:
+        logger.error(f"❌ NB Visualization analysis failed for {file.filename}: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Visualization analysis failed: {str(e)}"
+        )
+
 @app.get("/streaming", response_class=HTMLResponse)
 async def streaming_interface():
     """Serve the streaming test interface"""
@@ -425,6 +525,7 @@ async def root():
         "endpoints": {
             "basic_analysis": "/api/audio/analyze",
             "enhanced_analysis": "/api/audio/analyze-enhanced",
+            "visualization_analysis": "/api/audio/analyze-visualization",
             "cache_stats": "/api/stats/cache",
             "health_check": "/api/health/enhanced",
             "cache_cleanup": "/api/admin/cache/cleanup"

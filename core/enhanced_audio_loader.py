@@ -137,6 +137,10 @@ class EnhancedAudioLoader:
         active_features = [k for k, v in capabilities.items() if v]
         logger.info(f"📋 Active capabilities: {', '.join(active_features)}")
     
+    def get_audioflux_processor(self):
+        """Get the AudioFlux processor instance for visualization"""
+        return self.audioflux_processor
+    
     def analyze_with_caching(self, file_content: bytes, filename: str) -> Dict[str, Any]:
         """
         Main analysis method with intelligent caching
