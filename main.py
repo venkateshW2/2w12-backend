@@ -120,6 +120,15 @@ async def streaming_interface():
     except FileNotFoundError:
         return HTMLResponse(content="<h1>Streaming interface not found</h1>", status_code=404)
 
+@app.get("/ui", response_class=HTMLResponse)
+async def new_streaming_interface():
+    """Serve the new 2W12.one aesthetic streaming interface"""
+    try:
+        with open("streaming_redesigned.html", "r") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        return HTMLResponse(content="<h1>2W12 Audio Analysis interface not found</h1>", status_code=404)
+
 # === DAY 6: ENHANCED ENDPOINTS (NOW WORKING) ===
 
 @app.post("/api/audio/analyze-enhanced")

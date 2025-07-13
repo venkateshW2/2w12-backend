@@ -47,7 +47,74 @@ class AudioFluxProcessor:
             logger.error(f"❌ AudioFlux initialization failed: {e}")
             self.processors_ready = False
     
-    def extract_transients_fast(self, y: np.ndarray) -> Dict[str, Any]:
+    def comprehensive_audioflux_analysis(self, y: np.ndarray) -> Dict[str, Any]:
+        """Comprehensive AudioFlux analysis using v0.1.9 API"""
+        try:
+            logger.info("⚡ Starting AudioFlux comprehensive analysis...")
+            
+            # Use available AudioFlux classes
+            results = {}
+            
+            # 1. Onset Detection (faster than librosa)
+            onset_processor = af.Onset(
+                sample_rate=self.sample_rate,
+                fft_length=self.fft_length,
+                hop_length=self.hop_length
+            )
+            onset_times = onset_processor.onset(y)
+            
+            results.update({
+                "audioflux_transient_count": len(onset_times) if onset_times is not None else 0,
+                "audioflux_transient_times": onset_times.tolist() if onset_times is not None else [],
+                "audioflux_transient_density": len(onset_times) / (len(y) / self.sample_rate) if onset_times is not None else 0.0
+            })
+            
+            # 2. Mel Spectrogram (faster than librosa)
+            mel_processor = af.MelSpectrogram(
+                sample_rate=self.sample_rate,
+                n_fft=self.fft_length,
+                hop_length=self.hop_length,
+                n_mels=self.mel_bands
+            )
+            mel_spec = mel_processor.melspectrogram(y)
+            
+            if mel_spec is not None:
+                mel_coeffs = np.mean(mel_spec, axis=1)  # Average over time
+                results.update({
+                    "audioflux_mel_coefficients": mel_coeffs.tolist(),
+                    "audioflux_mel_std": np.std(mel_spec, axis=1).tolist(),
+                    "audioflux_mel_bands": self.mel_bands
+                })
+            
+            # 3. Spectral Features
+            spectral_processor = af.Spectral(
+                sample_rate=self.sample_rate,
+                fft_length=self.fft_length,
+                hop_length=self.hop_length
+            )
+            
+            # Get spectral features
+            spectral_features = spectral_processor.spectral(y)
+            if spectral_features is not None:
+                results.update({
+                    "audioflux_spectral_centroid": float(np.mean(spectral_features.get('centroid', [0]))),
+                    "audioflux_spectral_rolloff": float(np.mean(spectral_features.get('rolloff', [0]))),
+                    "audioflux_spectral_bandwidth": float(np.mean(spectral_features.get('bandwidth', [0])))
+                })
+            
+            results.update({
+                "audioflux_analysis_complete": True,
+                "audioflux_performance": "native_audioflux_v0.1.9",
+                "audioflux_architecture": "option_a_optimized"
+            })
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"❌ AudioFlux comprehensive analysis failed: {e}")
+            return self._audioflux_fallback_analysis(y)
+    
+    def _audioflux_fallback_analysis(self, y: np.ndarray) -> Dict[str, Any]:
         """
         Fast transient detection using AudioFlux
         Uses available AudioFlux spectral analysis features

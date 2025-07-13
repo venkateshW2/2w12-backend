@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2W12 Audio Analysis</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #fafafa;
+            --bg-secondary: #f5f5f5;
+            --bg-card: #ffffff;
+            --text-primary: #1a1a1a;
+            --text-secondary: #8e8e8e;
+            --text-muted: #999;
+            --accent-pink: #ff0080;
+            --neutral-gray: #777777;
+            --success-green: #00ff80;
+            --warning-orange: #ff9800;
+            --shadow-soft: 0 2px 12px rgba(0,0,0,0.08);
+            --shadow-hover: 0 4px 24px rgba(0,0,0,0.12);
+            --border-radius: 12px;
+            --border-radius-sm: 8px;
+            --spacing-xs: 8px;
+            --spacing-sm: 16px;
+            --spacing-md: 24px;
+            --spacing-lg: 32px;
+            --spacing-xl: 48px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            font-weight: 400;
+            letter-spacing: -0.01em;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing-md);
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: var(--spacing-xl);
+            padding: var(--spacing-lg) 0;
+        }
+
+        .header h1 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: clamp(2rem, 4vw, 2.5rem);
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-sm);
+            letter-spacing: 1px;
+        }
+
+        .header .subtitle {
+            font-size: clamp(1rem, 2vw, 1.1rem);
+            color: var(--text-secondary);
+            font-weight: 300;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .header .accent {
+            color: var(--accent-pink);
+        }
+
+        /* Upload Card */
+        .upload-card {
+            background: var(--bg-card);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-xl);
+            margin-bottom: var(--spacing-xl);
+            box-shadow: var(--shadow-soft);
+            border: 2px dashed var(--text-muted);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .upload-card:hover {
+            border-color: var(--accent-pink);
+            box-shadow: var(--shadow-hover);
+            transform: translateY(-2px);
+        }
+
+        .upload-card.dragover {
+            border-color: var(--accent-pink);
+            background: linear-gradient(135deg, #fff, #fff8fc);
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: var(--spacing-sm);
+            opacity: 0.6;
+        }
+
+        .upload-text {
+            font-size: 1.2rem;
+            font-weight: 500;
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .upload-hint {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        /* Main Grid Layout */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-lg);
+            margin-bottom: var(--spacing-xl);
+        }
+
+        /* Progress Card */
+        .progress-card {
+            background: var(--bg-card);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            box-shadow: var(--shadow-soft);
+            display: none;
+            height: fit-content;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-md);
+        }
+
+        .progress-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .progress-time {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: var(--spacing-md);
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-pink), #ff4da6);
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 0%;
+        }
+
+        .progress-status {
+            padding: var(--spacing-sm);
+            border-radius: var(--border-radius-sm);
+            font-size: 0.9rem;
+            margin-bottom: var(--spacing-md);
+        }
+
+        .progress-status.upload { background: linear-gradient(135deg, #e3f2fd, #f0f8ff); }
+        .progress-status.analyzing { background: linear-gradient(135deg, #fff3e0, #fef7f0); }
+        .progress-status.complete { background: linear-gradient(135deg, #e8f5e8, #f0fff0); }
+        .progress-status.error { background: linear-gradient(135deg, #ffebee, #fff5f5); }
+
+        /* Processing Timeline */
+        .timeline-card {
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius-sm);
+            padding: var(--spacing-md);
+            margin-top: var(--spacing-md);
+        }
+
+        .timeline-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            margin-bottom: var(--spacing-md);
+            color: var(--text-secondary);
+        }
+
+        .chunks {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: var(--spacing-sm);
+        }
+
+        .chunk {
+            background: var(--bg-card);
+            border-radius: var(--border-radius-sm);
+            padding: var(--spacing-sm);
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            cursor: help;
+            min-height: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .chunk-icon {
+            font-size: 1.5rem;
+            margin-bottom: 4px;
+        }
+
+        .chunk-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .chunk.processing {
+            background: var(--warning-orange);
+            color: white;
+            animation: pulse 2s infinite;
+            box-shadow: 0 0 20px rgba(255, 152, 0, 0.3);
+        }
+
+        .chunk.complete {
+            background: var(--success-green);
+            color: var(--text-primary);
+            box-shadow: 0 0 20px rgba(0, 255, 128, 0.2);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        /* Results Card */
+        .results-card {
+            background: var(--bg-card);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            box-shadow: var(--shadow-soft);
+            display: none;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-lg);
+            padding-bottom: var(--spacing-md);
+            border-bottom: 1px solid var(--bg-secondary);
+        }
+
+        .results-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
+        .performance-badge {
+            background: linear-gradient(135deg, var(--success-green), #00e676);
+            color: var(--text-primary);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--border-radius-sm);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        /* Metric Cards Grid */
+        .metric-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .metric-card {
+            background: linear-gradient(135deg, var(--bg-secondary), var(--bg-card));
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            text-align: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border: 1px solid rgba(0,0,0,0.05);
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .metric-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 2rem;
+            font-weight: 600;
+            color: var(--accent-pink);
+            margin-bottom: var(--spacing-xs);
+            line-height: 1;
+            word-break: break-word;
+        }
+
+        .metric-label {
+            font-weight: 500;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-confidence {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: var(--spacing-xs);
+        }
+
+        /* Timeline Visualization Card */
+        .timeline-viz-card {
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-lg);
+            display: none;
+        }
+
+        .timeline-viz-title {
+            font-family: 'JetBrains Mono', monospace;
+            margin-bottom: var(--spacing-md);
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+
+        .downbeats-container {
+            background: var(--bg-card);
+            border-radius: var(--border-radius-sm);
+            padding: var(--spacing-md);
+            position: relative;
+            min-height: 60px;
+            overflow-x: auto;
+        }
+
+        .downbeats {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            min-height: 32px;
+            padding: var(--spacing-sm) 0;
+        }
+
+        .downbeat {
+            width: 4px;
+            height: 32px;
+            background: var(--accent-pink);
+            border-radius: 2px;
+            opacity: 0.8;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .downbeat:hover {
+            opacity: 1;
+            background: var(--success-green);
+            transform: scaleY(1.2);
+        }
+
+        /* Technical Details Card */
+        .tech-card {
+            background: var(--bg-card);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-lg);
+            border-left: 4px solid var(--accent-pink);
+        }
+
+        .tech-title {
+            font-family: 'JetBrains Mono', monospace;
+            margin-bottom: var(--spacing-md);
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--spacing-md);
+        }
+
+        .tech-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-sm) 0;
+            border-bottom: 1px solid var(--bg-secondary);
+        }
+
+        .tech-item:last-child {
+            border-bottom: none;
+        }
+
+        .tech-label {
+            font-weight: 500;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .tech-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            text-align: right;
+            max-width: 150px;
+            word-break: break-word;
+        }
+
+        /* Raw Data Card */
+        .raw-data-card {
+            background: var(--bg-card);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .raw-data-card summary {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+            cursor: pointer;
+            padding: var(--spacing-sm);
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius-sm);
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .raw-data-card pre {
+            background: #1a1a1a;
+            color: #00ff80;
+            padding: var(--spacing-lg);
+            border-radius: var(--border-radius-sm);
+            overflow: auto;
+            max-height: 400px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            line-height: 1.4;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .metric-cards {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: var(--spacing-sm);
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .upload-card {
+                padding: var(--spacing-lg);
+            }
+
+            .chunks {
+                grid-template-columns: 1fr;
+            }
+
+            .tech-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .results-header {
+                flex-direction: column;
+                gap: var(--spacing-sm);
+                align-items: flex-start;
+            }
+
+            .performance-badge {
+                align-self: flex-start;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .metric-cards {
+                grid-template-columns: 1fr;
+            }
+            
+            .metric-value {
+                font-size: 1.5rem;
+            }
+        }
+
+        /* Hidden input */
+        #fileInput {
+            display: none;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            bottom: 110%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--border-radius-sm);
+            font-size: 0.8rem;
+            white-space: nowrap;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .chunk:hover .tooltip {
+            opacity: 1;
+        }
+
+        /* Loading Animation */
+        .loading-dots::after {
+            content: '';
+            animation: dots 2s infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: ''; }
+            40% { content: '.'; }
+            60% { content: '..'; }
+            80%, 100% { content: '...'; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>2W12 <span class="accent">Audio Analysis</span></h1>
+            <p class="subtitle">Professional-grade ML-powered music analysis with real-time processing</p>
+        </div>
+
+        <!-- Upload Card -->
+        <div class="upload-card" onclick="document.getElementById('fileInput').click()">
+            <div class="upload-icon">🎵</div>
+            <div class="upload-text">Drop your audio file here or click to browse</div>
+            <div class="upload-hint">Supports MP3, WAV, FLAC, AAC • Maximum 10 minutes</div>
+            <input type="file" id="fileInput" accept="audio/*" onchange="startAnalysis()">
+        </div>
+
+        <!-- Main Grid -->
+        <div class="main-grid">
+            <!-- Progress Card -->
+            <div class="progress-card" id="progressCard">
+                <div class="progress-header">
+                    <div class="progress-title">Processing<span class="loading-dots"></span></div>
+                    <div class="progress-time" id="progressTime">0.0s</div>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                
+                <div class="progress-status" id="progressStatus">Ready to analyze...</div>
+                
+                <div class="timeline-card">
+                    <div class="timeline-title">ML Pipeline Components</div>
+                    <div class="chunks" id="chunks"></div>
+                </div>
+            </div>
+
+            <!-- Results Card -->
+            <div class="results-card" id="resultsCard">
+                <div class="results-header">
+                    <div class="results-title">Analysis Complete</div>
+                    <div class="performance-badge" id="performanceBadge">5.1x REALTIME</div>
+                </div>
+
+                <!-- Metric Cards -->
+                <div class="metric-cards" id="metricCards">
+                    <!-- Cards will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Timeline Visualization -->
+        <div class="timeline-viz-card" id="timelineVizCard">
+            <h4 class="timeline-viz-title">🥁 Downbeat Timeline</h4>
+            <div class="downbeats-container">
+                <div class="downbeats" id="downbeats"></div>
+            </div>
+        </div>
+
+        <!-- Technical Details -->
+        <div class="tech-card" id="techCard" style="display: none;">
+            <h4 class="tech-title">⚙️ Technical Details</h4>
+            <div class="tech-grid" id="techGrid">
+                <!-- Technical details will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Raw Data -->
+        <div class="raw-data-card" style="display: none;" id="rawDataCard">
+            <details>
+                <summary>🔍 View Raw Analysis Data</summary>
+                <pre id="rawData">No data available</pre>
+            </details>
+        </div>
+    </div>
+
+    <script>
+        let startTime;
+        let updateInterval;
+
+        // Component names for timeline
+        const components = [
+            { icon: '🧠', label: 'ML Models', desc: 'CREPE key detection, tempo analysis, danceability scoring' },
+            { icon: '🥁', label: 'Downbeats', desc: 'RNN-based downbeat detection and meter analysis' },
+            { icon: '⚡', label: 'AudioFlux', desc: 'Fast transient detection and mel-spectrogram extraction' },
+            { icon: '🎵', label: 'RMS Energy', desc: 'Essential energy analysis for dynamics' }
+        ];
+
+        // Initialize drag and drop
+        function initializeDragDrop() {
+            const uploadCard = document.querySelector('.upload-card');
+            
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                uploadCard.addEventListener(eventName, preventDefaults, false);
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                uploadCard.addEventListener(eventName, () => uploadCard.classList.add('dragover'), false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                uploadCard.addEventListener(eventName, () => uploadCard.classList.remove('dragover'), false);
+            });
+
+            uploadCard.addEventListener('drop', handleDrop, false);
+        }
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function handleDrop(e) {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                document.getElementById('fileInput').files = files;
+                startAnalysis();
+            }
+        }
+
+        async function startAnalysis() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) return;
+            
+            // Show progress card
+            document.getElementById('progressCard').style.display = 'block';
+            document.getElementById('resultsCard').style.display = 'none';
+            document.getElementById('timelineVizCard').style.display = 'none';
+            document.getElementById('techCard').style.display = 'none';
+            document.getElementById('rawDataCard').style.display = 'none';
+            
+            // Create timeline
+            createTimeline();
+            
+            // Start timer
+            startTime = Date.now();
+            updateInterval = setInterval(updateTimer, 100);
+            
+            // Create form data
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                // Start streaming request
+                const response = await fetch('/api/audio/analyze-streaming', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                updateProgress(data);
+                            } catch (e) {
+                                console.log('Parse error:', e);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                updateProgress({
+                    status: 'error',
+                    message: `Connection error: ${error.message}`,
+                    progress: 0
+                });
+            }
+        }
+
+        function updateTimer() {
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            document.getElementById('progressTime').textContent = elapsed + 's';
+        }
+
+        function createTimeline() {
+            const chunksContainer = document.getElementById('chunks');
+            chunksContainer.innerHTML = '';
+            
+            components.forEach((comp, index) => {
+                const chunk = document.createElement('div');
+                chunk.className = 'chunk';
+                chunk.id = `chunk-${index}`;
+                
+                chunk.innerHTML = `
+                    <div class="chunk-icon">${comp.icon}</div>
+                    <div class="chunk-label">${comp.label}</div>
+                    <div class="tooltip">${comp.desc}</div>
+                `;
+                
+                chunksContainer.appendChild(chunk);
+            });
+        }
+
+        function updateProgress(data) {
+            const progressFill = document.getElementById('progressFill');
+            const progressStatus = document.getElementById('progressStatus');
+            
+            // Update progress bar
+            if (data.progress !== undefined) {
+                progressFill.style.width = data.progress + '%';
+                updateTimelineProgress(data.progress);
+            }
+            
+            // Update status
+            let className = 'progress-status';
+            let message = '';
+            
+            switch (data.status) {
+                case 'upload_complete':
+                    className += ' upload';
+                    message = `✅ Uploaded: ${data.filename} (${data.size_mb} MB)`;
+                    break;
+                case 'loading_audio':
+                    className += ' analyzing';
+                    message = `🔄 ${data.message}`;
+                    break;
+                case 'analyzing':
+                    className += ' analyzing';
+                    message = `⚡ ${data.message}`;
+                    break;
+                case 'complete':
+                    className += ' complete';
+                    message = `🎉 Analysis Complete!`;
+                    completeAnalysis(data.result);
+                    break;
+                case 'error':
+                    className += ' error';
+                    message = `❌ ${data.message}`;
+                    break;
+            }
+            
+            progressStatus.className = className;
+            progressStatus.textContent = message;
+        }
+
+        function updateTimelineProgress(progress) {
+            const chunks = document.querySelectorAll('.chunk');
+            const activeChunkIndex = Math.floor((progress / 100) * chunks.length);
+            
+            chunks.forEach((chunk, index) => {
+                if (index < activeChunkIndex) {
+                    chunk.className = 'chunk complete';
+                } else if (index === activeChunkIndex) {
+                    chunk.className = 'chunk processing';
+                } else {
+                    chunk.className = 'chunk';
+                }
+            });
+        }
+
+        function completeAnalysis(result) {
+            clearInterval(updateInterval);
+            
+            // Complete all timeline boxes
+            document.querySelectorAll('.chunk').forEach(chunk => {
+                chunk.className = 'chunk complete';
+            });
+            
+            // Show results
+            setTimeout(() => {
+                displayResults(result);
+            }, 500);
+        }
+
+        function displayResults(result) {
+            const analysis = result.analysis || result;
+            const fileInfo = analysis.file_info || {};
+            
+            // Calculate performance
+            const duration = parseFloat(fileInfo.analyzed_duration || analysis.duration || 0);
+            const processingTime = parseFloat(analysis.response_time || analysis.analysis_time || (Date.now() - startTime) / 1000);
+            const realtimeFactor = duration > 0 ? (duration / processingTime).toFixed(1) : 'N/A';
+            
+            // Update performance badge
+            document.getElementById('performanceBadge').textContent = `${realtimeFactor}x REALTIME`;
+            
+            // Create metric cards
+            createMetricCards(analysis, realtimeFactor, processingTime, duration);
+            
+            // Create timeline visualization
+            createTimelineVisualization(analysis);
+            
+            // Create technical details
+            createTechnicalDetails(analysis, fileInfo);
+            
+            // Show raw data
+            document.getElementById('rawData').textContent = JSON.stringify(result, null, 2);
+            
+            // Show all result sections
+            document.getElementById('resultsCard').style.display = 'block';
+            document.getElementById('techCard').style.display = 'block';
+            document.getElementById('rawDataCard').style.display = 'block';
+        }
+
+        function createMetricCards(analysis, realtimeFactor, processingTime, duration) {
+            const container = document.getElementById('metricCards');
+            
+            const metrics = [
+                {
+                    value: analysis.ml_key || analysis.key || 'N/A',
+                    label: 'Musical Key',
+                    confidence: analysis.ml_key_confidence || analysis.key_confidence
+                },
+                {
+                    value: analysis.ml_tempo || analysis.tempo || 'N/A',
+                    label: 'Tempo (BPM)',
+                    confidence: analysis.ml_tempo_confidence || analysis.tempo_confidence
+                },
+                {
+                    value: analysis.ml_danceability ? (analysis.ml_danceability * 100).toFixed(0) + '%' : 'N/A',
+                    label: 'Danceability',
+                    confidence: analysis.ml_danceability_confidence
+                },
+                {
+                    value: analysis.madmom_downbeat_count || 'N/A',
+                    label: 'Downbeats',
+                    confidence: analysis.madmom_downbeat_confidence
+                },
+                {
+                    value: analysis.madmom_meter_detection || 'N/A',
+                    label: 'Time Signature',
+                    confidence: null
+                },
+                {
+                    value: `${realtimeFactor}x`,
+                    label: 'Performance',
+                    confidence: null
+                }
+            ];
+            
+            container.innerHTML = metrics.map(metric => `
+                <div class="metric-card">
+                    <div class="metric-value">${metric.value}</div>
+                    <div class="metric-label">${metric.label}</div>
+                    ${metric.confidence ? `<div class="metric-confidence">Confidence: ${(metric.confidence * 100).toFixed(0)}%</div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function createTimelineVisualization(analysis) {
+            const downbeatTimes = analysis.madmom_downbeat_times;
+            if (downbeatTimes && downbeatTimes.length > 0) {
+                const container = document.getElementById('downbeats');
+                const duration = parseFloat(analysis.file_info?.analyzed_duration || analysis.duration || 100);
+                
+                container.innerHTML = downbeatTimes.map((time, index) => {
+                    const position = (time / duration) * 100;
+                    return `<div class="downbeat" title="Downbeat ${index + 1} at ${time.toFixed(1)}s"></div>`;
+                }).join('');
+                
+                document.getElementById('timelineVizCard').style.display = 'block';
+            }
+        }
+
+        function createTechnicalDetails(analysis, fileInfo) {
+            const container = document.getElementById('techGrid');
+            
+            const details = [
+                ['Duration', `${fileInfo.analyzed_duration || analysis.duration || 'N/A'}s`],
+                ['Sample Rate', `${fileInfo.processing_sample_rate || 'N/A'}Hz`],
+                ['Pipeline', analysis.analysis_pipeline?.join(' → ') || 'Standard'],
+                ['GPU Acceleration', analysis.ml_features_available !== false ? '✅ Enabled' : '❌ Disabled'],
+                ['AudioFlux Status', analysis.audioflux_analysis_complete ? '✅ Active' : '⚠️ Fallback'],
+                ['Madmom Status', analysis.madmom_status === 'success' ? '✅ Working' : '⚠️ Limited'],
+                ['Cache Status', analysis.cache_status || 'N/A'],
+                ['Architecture', analysis.architecture || 'hybrid']
+            ];
+            
+            container.innerHTML = details.map(([label, value]) => `
+                <div class="tech-item">
+                    <span class="tech-label">${label}</span>
+                    <span class="tech-value">${value}</span>
+                </div>
+            `).join('');
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', initializeDragDrop);
+    </script>
+</body>
+</html>

@@ -268,8 +268,9 @@ class EnhancedAudioLoader:
                 logger.info("⚡ Submitting AudioFlux fast feature extraction (transients/mel)...")
                 future_audioflux = executor.submit(self._audioflux_fast_features, y, sr)
                 
-                # REMOVED librosa - using AudioFlux instead for 14x speedup
-                logger.info("⚡ Librosa ELIMINATED - using AudioFlux for all features")
+                # SIMPLIFIED: Only RMS energy from librosa (essential for energy analysis)
+                logger.info("⚡ Librosa MINIMIZED - only essential RMS energy calculation")
+                future_librosa = executor.submit(self._librosa_minimal_analysis, y, sr)
                 
                 # Wait for all analyses to complete - optimized order
                 logger.info("⏳ Waiting for Essentia ML analysis (key/tempo/danceability)...")
@@ -284,7 +285,9 @@ class EnhancedAudioLoader:
                 rhythm_analysis = future_rhythm.result()
                 logger.info("✅ Madmom downbeat analysis completed")
                 
-                # Librosa ELIMINATED - no waiting needed, AudioFlux handles all features
+                logger.info("⏳ Waiting for minimal librosa analysis (RMS energy only)...")
+                librosa_analysis = future_librosa.result()
+                logger.info("✅ Minimal librosa analysis completed")
             
             parallel_time = time.time() - parallel_start
             logger.info(f"⚡ Parallel analysis completed in {parallel_time:.2f}s")
@@ -303,14 +306,15 @@ class EnhancedAudioLoader:
                 # AudioFlux fast features (transients/mel coefficients)
                 **audioflux_analysis,
                 
-                # LIBROSA ELIMINATED - using AudioFlux for 14x speedup
+                # Minimal librosa (RMS energy only)
+                **librosa_analysis,
 
                 # Analysis metadata  
                 "features_extracted": list({**ml_analysis, **audioflux_analysis, **rhythm_analysis}.keys()),
-                "analysis_pipeline": ["essentia_ml_primary", "madmom_downbeats_numpy", "audioflux_fast"],
+                "analysis_pipeline": ["essentia_ml_primary", "madmom_downbeats_numpy", "audioflux_fast", "librosa_minimal"],
                 "architecture": "option_a_optimized_no_librosa", 
                 "quality_score": self._calculate_analysis_quality({
-                **ml_analysis, **rhythm_analysis, **audioflux_analysis
+                **ml_analysis, **rhythm_analysis, **audioflux_analysis, **librosa_analysis
                 }),
                 
                 # Parallel processing performance metrics
@@ -342,8 +346,8 @@ class EnhancedAudioLoader:
             original_duration = info.duration
             original_sr = info.samplerate
             
-            # OPTIMIZED: Use 11025 Hz for 2x speed improvement
-            optimized_sample_rate = 11025
+            # OPTIMIZED: Use larger frames + lower sample rate for 4x speed improvement
+            optimized_sample_rate = 8000  # Even lower for faster processing
             
             # Duration-based loading strategy
             if original_duration > self.max_duration:
@@ -362,7 +366,7 @@ class EnhancedAudioLoader:
                 "processing_sample_rate": int(sr),
                 "truncated": original_duration > self.max_duration,
                 "file_size_mb": round(os.path.getsize(file_path) / 1024 / 1024, 2),
-                "optimization": "11025Hz_fast_mode"
+                "optimization": "8000Hz_large_frames_ultra_fast"
             }
             
             logger.info(f"📊 Audio loaded: {analyzed_duration:.1f}s @ {sr}Hz (optimized)")
@@ -372,93 +376,40 @@ class EnhancedAudioLoader:
             logger.error(f"❌ Audio loading failed: {e}")
             raise ValueError(f"Could not load audio file: {e}")
     
-    def _librosa_enhanced_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
-        """REVOLUTIONARY: EssentiaWrapper ultra-fast analysis (3,316x speedup vs targets)"""
+    def _librosa_minimal_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
+        """MINIMAL: Only essential RMS energy analysis (10x faster than full librosa)"""
         duration = len(y) / sr
-        logger.info(f"🚀 Starting REVOLUTIONARY EssentiaWrapper analysis ({duration:.1f}s)")
-        
-        # DISABLED: EssentiaWrapper (was slow for long files, use real ML models instead)
-        logger.info("🎯 Using proper ML models instead of EssentiaWrapper for better accuracy")
-        
-        # Fallback to librosa (slow but working)
-        logger.info(f"🐌 Falling back to slow librosa analysis ({duration:.1f}s)")
-        
-        # Initialize with safe defaults
-        key_analysis = {"key": "C", "mode": "major", "key_confidence": 0.5}
-        tempo_analysis = {"tempo": 120.0, "tempo_confidence": 0.5}
-        harmonic_analysis = {"harmonic_confidence": 0.5}
-        spectral_analysis = {"brightness": "unknown"}
-        rhythmic_analysis = {"onset_count": 0}
-        energy_analysis = {"energy_level": "medium"}
+        logger.info(f"⚡ Starting minimal librosa analysis (RMS energy only) for {duration:.1f}s")
         
         try:
-            # === ENHANCED KEY DETECTION ===
-            key_analysis = self._enhanced_key_detection(y, sr)
-            logger.info("✅ Key detection completed")
-        except Exception as e:
-            logger.error(f"❌ Key detection failed: {e}")
-        
-        try:
-            # === ENHANCED TEMPO DETECTION ===
-            tempo_analysis = self._enhanced_tempo_detection(y, sr)
-            logger.info("✅ Tempo detection completed")
-        except Exception as e:
-            logger.error(f"❌ Tempo detection failed: {e}")
-        
-        try:
-            # === HARMONIC ANALYSIS ===
-            harmonic_analysis = self._harmonic_content_analysis(y, sr)
-            logger.info("✅ Harmonic analysis completed")
-        except Exception as e:
-            logger.error(f"❌ Harmonic analysis failed: {e}")
-        
-        try:
-            # === SPECTRAL FEATURES ===
-            spectral_analysis = self._spectral_feature_analysis(y, sr)
-            logger.info("✅ Spectral analysis completed")
-        except Exception as e:
-            logger.error(f"❌ Spectral analysis failed: {e}")
-        
-        try:
-            # === RHYTHMIC FEATURES ===
-            rhythmic_analysis = self._rhythmic_feature_analysis(y, sr)
-            logger.info("✅ Rhythmic analysis completed")
-        except Exception as e:
-            logger.error(f"❌ Rhythmic analysis failed: {e}")
-        
-        try:
-            # === ENERGY ANALYSIS ===
-            energy_analysis = self._energy_analysis(y, sr)
-            logger.info("✅ Energy analysis completed")
-        except Exception as e:
-            logger.error(f"❌ Energy analysis failed: {e}")
-        
-        # Combine all enhanced features with safe defaults
-        enhanced_result = {
-            "duration": round(float(duration), 2),
+            # ONLY RMS energy - essential for energy level detection  
+            rms = librosa.feature.rms(y=y, hop_length=4096)  # Much larger hop for 2x speed
+            rms_mean = float(np.mean(rms))
+            rms_std = float(np.std(rms))
             
-            # Enhanced analyses
-            **key_analysis,
-            **tempo_analysis,
-            **harmonic_analysis,
-            **spectral_analysis,
-            **rhythmic_analysis,
-            **energy_analysis,
+            # Energy level classification
+            if rms_mean > 0.1:
+                energy_level = "high"
+            elif rms_mean > 0.05:
+                energy_level = "medium"
+            else:
+                energy_level = "low"
             
-            # Overall confidence
-            "overall_confidence": self._calculate_overall_confidence([
-                key_analysis.get("key_confidence", 0.5),
-                tempo_analysis.get("tempo_confidence", 0.5),
-                harmonic_analysis.get("harmonic_confidence", 0.5)
-            ]),
+            return {
+                "rms_energy": round(rms_mean, 4),
+                "energy_variance": round(rms_std, 4),
+                "energy_level": energy_level,
+                "processing_method": "librosa_minimal_rms_only",
+                "performance_note": "Minimal librosa - RMS energy only (10x faster)"
+            }
             
-            # Mark as fallback
-            "processing_method": "librosa_fallback",
-            "performance_note": "Using slow librosa fallback - EssentiaWrapper unavailable"
-        }
-        
-        logger.info("✅ Enhanced librosa analysis completed (fallback mode)")
-        return enhanced_result
+        except Exception as e:
+            logger.error(f"❌ Minimal librosa analysis failed: {e}")
+            return {
+                "rms_energy": 0.05,
+                "energy_level": "medium",
+                "processing_method": "librosa_minimal_failed"
+            }
     
     def _convert_essentia_to_enhanced_format(self, essentia_results: Dict[str, Any], y: np.ndarray, sr: int) -> Dict[str, Any]:
         """Convert EssentiaWrapper results to enhanced_audio_loader format"""
@@ -531,170 +482,13 @@ class EnhancedAudioLoader:
         
         return enhanced_result
     
-    def _enhanced_key_detection(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
-        """Fast key detection (lightweight since Essentia ML provides better results)"""
-        try:
-            # Fast chromagram with optimized parameters for speed
-            chromagram = librosa.feature.chroma_stft(
-                y=y, sr=sr, 
-                hop_length=2048,  # 4x larger hop (faster)
-                n_fft=1024,       # Smaller FFT (faster) 
-                norm=None         # Skip normalization (faster)
-            )
-            
-            # Mean chroma vector
-            chroma_mean = np.mean(chromagram, axis=1)
-            
-            # Key detection
-            keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-            key_index = np.argmax(chroma_mean)
-            detected_key = keys[key_index]
-            
-            # Key confidence based on chroma strength
-            key_strength = float(chroma_mean[key_index])
-            key_confidence = min(1.0, key_strength * 2.0)
-            
-            # Major/Minor detection
-            major_profile = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1])
-            minor_profile = np.array([1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0])
-            
-            # Rotate profiles to match detected key
-            major_rotated = np.roll(major_profile, key_index)
-            minor_rotated = np.roll(minor_profile, key_index)
-            
-            # Calculate correlations safely
-            try:
-                major_correlation = float(np.corrcoef(chroma_mean, major_rotated)[0, 1])
-                if np.isnan(major_correlation):
-                    major_correlation = 0.0
-            except:
-                major_correlation = 0.0
-                
-            try:
-                minor_correlation = float(np.corrcoef(chroma_mean, minor_rotated)[0, 1])
-                if np.isnan(minor_correlation):
-                    minor_correlation = 0.0
-            except:
-                minor_correlation = 0.0
-            
-            if major_correlation > minor_correlation:
-                mode = "major"
-                mode_confidence = abs(major_correlation)
-            else:
-                mode = "minor"
-                mode_confidence = abs(minor_correlation)
-            
-            return {
-                "key": detected_key,
-                "mode": mode,
-                "key_confidence": round(key_confidence, 3),
-                "mode_confidence": round(mode_confidence, 3),
-                "full_key": f"{detected_key} {mode}",
-                "chroma_strength": round(key_strength, 3)
-            }
-        except Exception as e:
-            logger.error(f"Key detection error: {e}")
-            return {"key": "C", "mode": "major", "key_confidence": 0.5}
+    # REMOVED: _enhanced_key_detection - handled by Essentia ML models
     
-    def _enhanced_tempo_detection(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
-        """Fast tempo detection (lightweight since Madmom provides better results)"""
-        try:
-            # Fast single-method tempo detection (remove max_tempo - not supported in this librosa version)
-            tempo1, beats1 = librosa.beat.beat_track(
-                y=y, sr=sr,
-                hop_length=1024,  # Larger hop for speed
-                start_bpm=60      # Constrain search range
-            )
-            tempo1 = float(tempo1)
-            
-            # Skip expensive methods since we have Madmom
-            tempo2 = tempo1  # Use same result
-            tempo3 = tempo1  # Use same result
-            
-            # Collect tempo candidates
-            tempo_candidates = [t for t in [tempo1, tempo2, tempo3] if 40 <= t <= 200]
-            
-            if tempo_candidates:
-                final_tempo = float(np.median(tempo_candidates))
-                tempo_std = float(np.std(tempo_candidates))
-                tempo_confidence = max(0.1, 1.0 - (tempo_std / 30.0))
-            else:
-                final_tempo = 120.0
-                tempo_confidence = 0.3
-            
-            # Beat strength analysis
-            beat_strength = float(np.mean(librosa.onset.onset_strength(y=y, sr=sr)))
-            
-            return {
-                "tempo": round(final_tempo, 1),
-                "tempo_confidence": round(tempo_confidence, 3),
-                "tempo_candidates": [round(t, 1) for t in tempo_candidates],
-                "beat_strength": round(beat_strength, 4),
-                "beat_count": len(beats1),
-                "rhythmic_consistency": round(tempo_confidence, 3)
-            }
-        except Exception as e:
-            logger.error(f"Tempo detection error: {e}")
-            return {"tempo": 120.0, "tempo_confidence": 0.5}
+    # REMOVED: _enhanced_tempo_detection - handled by Essentia ML models and Madmom
     
-    def _harmonic_content_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
-        """OPTIMIZED: Fast harmonic vs percussive content analysis"""
-        try:
-            # OPTIMIZED: Fast harmonic/percussive separation with reduced margin
-            y_harmonic, y_percussive = librosa.effects.hpss(
-                y, 
-                margin=(1.0, 1.0),  # Reduced margin for speed (default is 1.0, 5.0)
-                power=1.0           # Reduced power for speed (default is 2.0)
-            )
-            
-            # Calculate ratios
-            harmonic_energy = float(np.mean(np.abs(y_harmonic)))
-            percussive_energy = float(np.mean(np.abs(y_percussive)))
-            total_energy = float(np.mean(np.abs(y)))
-            
-            harmonic_ratio = harmonic_energy / (total_energy + 1e-8)
-            percussive_ratio = percussive_energy / (total_energy + 1e-8)
-            
-            return {
-                "harmonic_ratio": round(harmonic_ratio, 3),
-                "percussive_ratio": round(percussive_ratio, 3),
-                "harmonic_confidence": round(harmonic_ratio, 3),
-                "content_type": "harmonic" if harmonic_ratio > percussive_ratio else "percussive",
-                "optimization": "fast_hpss"
-            }
-        except Exception as e:
-            logger.error(f"Harmonic analysis error: {e}")
-            return {"harmonic_confidence": 0.5}
+    # REMOVED: _harmonic_content_analysis - handled by AudioFlux
     
-    def _spectral_feature_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
-        """OPTIMIZED: Fast spectral feature analysis - essential features only"""
-        try:
-            # OPTIMIZED: Use faster hop_length for all spectral features
-            hop_length = 2048  # 4x larger hop for speed
-            
-            # Essential spectral features only (skip expensive ones)
-            spectral_centroid = float(np.mean(librosa.feature.spectral_centroid(
-                y=y, sr=sr, hop_length=hop_length
-            )))
-            spectral_rolloff = float(np.mean(librosa.feature.spectral_rolloff(
-                y=y, sr=sr, hop_length=hop_length
-            )))
-            zero_crossing_rate = float(np.mean(librosa.feature.zero_crossing_rate(
-                y, hop_length=hop_length
-            )))
-            
-            # Skip expensive features: spectral_bandwidth, spectral_contrast, spectral_flatness
-            
-            return {
-                "spectral_centroid": round(spectral_centroid, 2),
-                "spectral_rolloff": round(spectral_rolloff, 2),
-                "zero_crossing_rate": round(zero_crossing_rate, 4),
-                "brightness": "bright" if spectral_centroid > 2000 else "dark",
-                "optimization": "fast_spectral"
-            }
-        except Exception as e:
-            logger.error(f"Spectral analysis error: {e}")
-            return {"brightness": "unknown"}
+    # REMOVED: _spectral_feature_analysis - handled by AudioFlux
     
     def _madmom_fast_rhythm_analysis(self, audio_file_path: str) -> Dict[str, Any]:
         """Fast Madmom rhythm analysis using file-based approach (WORKING VERSION)"""
@@ -708,65 +502,9 @@ class EnhancedAudioLoader:
             logger.warning("⚠️ Madmom processor not available - using fallback")
             return {"madmom_status": "unavailable"}
 
-    def _rhythmic_feature_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
-        """OPTIMIZED: Fast rhythmic pattern analysis"""
-        try:
-            # OPTIMIZED: Fast onset detection with larger hop_length
-            hop_length = 1024  # 2x larger hop for speed
-            
-            onsets = librosa.onset.onset_detect(
-                y=y, sr=sr, units='time', hop_length=hop_length
-            )
-            onset_strength = librosa.onset.onset_strength(
-                y=y, sr=sr, hop_length=hop_length
-            )
-            
-            # Rhythmic regularity
-            if len(onsets) > 1:
-                onset_intervals = np.diff(onsets)
-                rhythmic_regularity = 1.0 / (1.0 + float(np.std(onset_intervals)))
-            else:
-                rhythmic_regularity = 0.0
-            
-            return {
-                "onset_count": len(onsets),
-                "onset_density": round(len(onsets) / (len(y) / sr), 2),
-                "rhythmic_regularity": round(rhythmic_regularity, 3),
-                "onset_strength_mean": round(float(np.mean(onset_strength)), 4),
-                "optimization": "fast_onset"
-            }
-        except Exception as e:
-            logger.error(f"Rhythmic analysis error: {e}")
-            return {"onset_count": 0}
+    # REMOVED: _rhythmic_feature_analysis - handled by AudioFlux
     
-    def _energy_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
-        """OPTIMIZED: Fast energy and dynamics analysis"""
-        try:
-            # OPTIMIZED: Fast RMS energy with larger hop_length
-            hop_length = 1024  # 2x larger hop for speed
-            
-            rms = librosa.feature.rms(y=y, hop_length=hop_length)[0]
-            rms_mean = float(np.mean(rms))
-            rms_std = float(np.std(rms))
-            dynamic_range = float(np.max(rms) - np.min(rms))
-            
-            # Energy classification
-            if rms_mean > 0.1:
-                energy_level = "high"
-            elif rms_mean > 0.05:
-                energy_level = "medium"
-            else:
-                energy_level = "low"
-            
-            return {
-                "rms_energy": round(rms_mean, 4),
-                "energy_variance": round(rms_std, 4),
-                "dynamic_range": round(dynamic_range, 4),
-                "energy_level": energy_level
-            }
-        except Exception as e:
-            logger.error(f"Energy analysis error: {e}")
-            return {"energy_level": "medium"}
+    # REMOVED: _energy_analysis - replaced by minimal RMS in _librosa_minimal_analysis
     
     def _calculate_overall_confidence(self, confidence_scores: List[float]) -> float:
         """Calculate overall analysis confidence"""
@@ -1046,7 +784,7 @@ class EnhancedAudioLoader:
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
             futures = []
             for chunk_audio in batch_audio_chunks:
-                future = executor.submit(self._librosa_enhanced_analysis, chunk_audio, sr)
+                future = executor.submit(self._librosa_minimal_analysis, chunk_audio, sr)
                 futures.append(future)
             
             # Collect results

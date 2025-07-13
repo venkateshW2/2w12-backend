@@ -331,17 +331,8 @@ class MadmomProcessor:
             frames = sig(audio_file_path)
             logger.info(f"✅ Audio loaded: {len(frames)} frames")
             
-            # Step 1: Beat detection (required for downbeats)
-            logger.info("🔄 Detecting beats...")
-            beat_proc = RNNBeatProcessor()
-            beat_activations = beat_proc(frames)
-            
-            beat_tracker = BeatTrackingProcessor(fps=50)
-            beats = beat_tracker(beat_activations)
-            logger.info(f"✅ Detected {len(beats)} beats")
-            
-            # Step 2: Downbeat detection (MAIN FOCUS)
-            logger.info("🔄 Detecting downbeats...")
+            # OPTIMIZED: Downbeat-ONLY detection (no beat tracking)
+            logger.info("🔄 Downbeat-ONLY detection (no beat tracking)...")
             downbeat_proc = RNNDownBeatProcessor()
             downbeat_activations = downbeat_proc(frames)
             
@@ -349,6 +340,8 @@ class MadmomProcessor:
                 beats_per_bar=[3, 4], fps=50  # Focus on 3/4 and 4/4 time
             )
             downbeats = downbeat_tracker(downbeat_activations)
+            
+            logger.info(f"✅ Downbeat-only detection completed: {len(downbeats)} downbeat positions")
             
             if len(downbeats) > 0:
                 # Extract downbeat times and positions
@@ -360,24 +353,18 @@ class MadmomProcessor:
                 
                 logger.info(f"✅ Detected {len(actual_downbeats)} downbeats")
                 
-                # Meter analysis
+                # Meter analysis (simplified without beat tracking)
                 if len(actual_downbeats) > 1:
                     downbeat_intervals = np.diff(actual_downbeats)
                     mean_bar_length = np.mean(downbeat_intervals)
                     
-                    # Estimate meter from beat/downbeat ratio
-                    total_beats_in_bars = 0
-                    bar_count = 0
-                    
-                    for i in range(len(actual_downbeats) - 1):
-                        bar_start = actual_downbeats[i]
-                        bar_end = actual_downbeats[i + 1]
-                        beats_in_bar = len(beats[(beats >= bar_start) & (beats < bar_end)])
-                        if beats_in_bar > 0:
-                            total_beats_in_bars += beats_in_bar
-                            bar_count += 1
-                    
-                    estimated_meter = total_beats_in_bars / bar_count if bar_count > 0 else 4
+                    # Estimate meter from downbeat intervals only
+                    if mean_bar_length > 3.0:
+                        estimated_meter = 4.0  # Likely 4/4
+                    elif mean_bar_length > 1.5:
+                        estimated_meter = 3.0  # Likely 3/4
+                    else:
+                        estimated_meter = 4.0  # Default to 4/4
                     
                     # Confidence based on consistency
                     interval_consistency = 1.0 / (1.0 + np.std(downbeat_intervals))
