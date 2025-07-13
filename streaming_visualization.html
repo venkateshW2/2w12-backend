@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2W12 Audio Analysis - NB Visualization</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #fafafa;
+            --bg-secondary: #f5f5f5;
+            --bg-card: #ffffff;
+            --text-primary: #1a1a1a;
+            --text-secondary: #8e8e8e;
+            --text-muted: #999;
+            --accent-pink: #ff0080;
+            --neutral-gray: #777777;
+            --success-green: #00ff80;
+            --warning-orange: #ff9800;
+            --shadow-soft: 0 2px 12px rgba(0,0,0,0.08);
+            --shadow-hover: 0 4px 24px rgba(0,0,0,0.12);
+            --border-radius: 12px;
+            --border-radius-sm: 8px;
+            --spacing-xs: 8px;
+            --spacing-sm: 16px;
+            --spacing-md: 24px;
+            --spacing-lg: 32px;
+            --spacing-xl: 48px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            font-weight: 400;
+            letter-spacing: -0.01em;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing-md);
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: var(--spacing-xl);
+            padding: var(--spacing-lg) 0;
+        }
+
+        .header h1 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: clamp(2rem, 4vw, 2.5rem);
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-sm);
+            letter-spacing: 1px;
+        }
+
+        .header .subtitle {
+            font-size: clamp(1rem, 2vw, 1.1rem);
+            color: var(--text-secondary);
+            font-weight: 300;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .header .accent {
+            color: var(--accent-pink);
+        }
+
+        .nb-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--accent-pink), #ff4da6);
+            color: white;
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--border-radius-sm);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-left: var(--spacing-sm);
+        }
+
+        /* Upload Card */
+        .upload-card {
+            background: var(--bg-card);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-xl);
+            margin-bottom: var(--spacing-xl);
+            box-shadow: var(--shadow-soft);
+            border: 2px dashed var(--text-muted);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .upload-card:hover {
+            border-color: var(--accent-pink);
+            box-shadow: var(--shadow-hover);
+            transform: translateY(-2px);
+        }
+
+        .upload-card.dragover {
+            border-color: var(--accent-pink);
+            background: linear-gradient(135deg, #fff, #fff8fc);
+            transform: scale(1.02);
+        }
+
+        /* Progress Section */
+        .progress-section {
+            background: var(--bg-card);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-xl);
+            box-shadow: var(--shadow-soft);
+            display: none;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-md);
+        }
+
+        .progress-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: var(--spacing-md);
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-pink), #ff4da6);
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 0%;
+        }
+
+        .progress-status {
+            padding: var(--spacing-sm);
+            border-radius: var(--border-radius-sm);
+            font-size: 0.9rem;
+            margin-bottom: var(--spacing-md);
+            background: linear-gradient(135deg, #e3f2fd, #f0f8ff);
+        }
+
+        /* Visualization Container */
+        .visualization-container {
+            display: none;
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .visualization-header {
+            background: var(--bg-card);
+            border-radius: var(--border-radius) var(--border-radius) 0 0;
+            padding: var(--spacing-lg);
+            border-bottom: 1px solid var(--bg-secondary);
+        }
+
+        .visualization-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: var(--spacing-sm);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .waveform-container {
+            background: var(--bg-card);
+            border-radius: 0 0 var(--border-radius) var(--border-radius);
+            padding: var(--spacing-lg);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .waveform-canvas {
+            width: 100%;
+            height: 200px;
+            border-radius: var(--border-radius-sm);
+            cursor: crosshair;
+            border: 1px solid var(--bg-secondary);
+        }
+
+        .visualization-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: var(--spacing-md);
+            padding-top: var(--spacing-md);
+            border-top: 1px solid var(--bg-secondary);
+        }
+
+        .viz-metadata {
+            display: flex;
+            gap: var(--spacing-lg);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .viz-controls {
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+
+        .viz-button {
+            background: var(--bg-secondary);
+            border: none;
+            border-radius: var(--border-radius-sm);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .viz-button:hover {
+            background: var(--accent-pink);
+            color: white;
+        }
+
+        /* Results Grid */
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-lg);
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .results-card {
+            background: var(--bg-card);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            box-shadow: var(--shadow-soft);
+            display: none;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-lg);
+            padding-bottom: var(--spacing-md);
+            border-bottom: 1px solid var(--bg-secondary);
+        }
+
+        .results-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
+        .performance-badge {
+            background: linear-gradient(135deg, var(--success-green), #00e676);
+            color: var(--text-primary);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--border-radius-sm);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        /* Metric Cards */
+        .metric-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .metric-card {
+            background: linear-gradient(135deg, var(--bg-secondary), var(--bg-card));
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            text-align: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border: 1px solid rgba(0,0,0,0.05);
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .metric-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: var(--accent-pink);
+            margin-bottom: var(--spacing-xs);
+            line-height: 1;
+            word-break: break-word;
+        }
+
+        .metric-label {
+            font-weight: 500;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Hidden input */
+        #fileInput {
+            display: none;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .results-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .metric-cards {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: var(--spacing-sm);
+            }
+
+            .visualization-controls {
+                flex-direction: column;
+                gap: var(--spacing-md);
+                align-items: flex-start;
+            }
+
+            .viz-metadata {
+                flex-direction: column;
+                gap: var(--spacing-xs);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .metric-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>2W12 <span class="accent">Audio Analysis</span><span class="nb-badge">NB</span></h1>
+            <p class="subtitle">AudioFlux-powered waveform visualization with Madmom downbeat integration</p>
+        </div>
+
+        <!-- Upload Card -->
+        <div class="upload-card" onclick="document.getElementById('fileInput').click()">
+            <div class="upload-icon">🎵</div>
+            <div class="upload-text">Drop your audio file here or click to browse</div>
+            <div class="upload-hint">AudioFlux + Madmom visualization • Maximum 10 minutes</div>
+            <input type="file" id="fileInput" accept="audio/*">
+        </div>
+
+        <!-- Progress Section -->
+        <div class="progress-section" id="progressSection">
+            <div class="progress-header">
+                <div class="progress-title">Processing<span class="loading-dots"></span></div>
+                <div class="progress-time" id="progressTime">0.0s</div>
+            </div>
+            
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            
+            <div class="progress-status" id="progressStatus">Ready to analyze...</div>
+        </div>
+
+        <!-- Visualization Container -->
+        <div class="visualization-container" id="visualizationContainer">
+            <div class="visualization-header">
+                <div class="visualization-title">
+                    🎨 Waveform Visualization
+                    <span class="performance-badge" id="performanceBadge">0.0x REALTIME</span>
+                </div>
+            </div>
+            <div class="waveform-container">
+                <canvas id="waveformCanvas" class="waveform-canvas"></canvas>
+                <div class="visualization-controls">
+                    <div class="viz-metadata">
+                        <span id="viz-duration">0s</span>
+                        <span id="viz-downbeats">0 downbeats</span>
+                        <span id="viz-waveform-points">0 points</span>
+                        <span id="viz-compression">0x compression</span>
+                    </div>
+                    <div class="viz-controls">
+                        <button class="viz-button" onclick="visualizationManager.exportVisualization()">Export PNG</button>
+                        <button class="viz-button" onclick="visualizationManager.reset()">Reset</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Grid -->
+        <div class="results-grid">
+            <!-- Analysis Results Card -->
+            <div class="results-card" id="resultsCard">
+                <div class="results-header">
+                    <div class="results-title">Analysis Results</div>
+                </div>
+
+                <!-- Metric Cards -->
+                <div class="metric-cards" id="metricCards">
+                    <!-- Cards will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Technical Details Card -->
+            <div class="results-card" id="techCard">
+                <div class="results-header">
+                    <div class="results-title">Technical Details</div>
+                </div>
+                
+                <div class="metric-cards">
+                    <div class="metric-card">
+                        <div class="metric-value" id="tech-pipeline">AudioFlux</div>
+                        <div class="metric-label">Pipeline</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="tech-gpu">GPU</div>
+                        <div class="metric-label">Acceleration</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="tech-madmom">Madmom</div>
+                        <div class="metric-label">Downbeats</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="tech-sample-rate">22kHz</div>
+                        <div class="metric-label">Sample Rate</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include modular components -->
+    <script src="ui/components/WaveformCanvas.js"></script>
+    <script src="ui/components/VisualizationManager.js"></script>
+
+    <script>
+        // Initialize visualization manager
+        let visualizationManager;
+        let startTime;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize the visualization manager
+            visualizationManager = new VisualizationManager({
+                waveformCanvasId: 'waveformCanvas',
+                progressCallback: updateProgress,
+                errorCallback: handleError,
+                completeCallback: handleComplete
+            });
+
+            // Initialize drag and drop
+            initializeDragDrop();
+
+            // File input handler
+            document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+
+            console.log('🚀 NB Visualization interface ready');
+        });
+
+        function initializeDragDrop() {
+            const uploadCard = document.querySelector('.upload-card');
+            
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                uploadCard.addEventListener(eventName, preventDefaults, false);
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                uploadCard.addEventListener(eventName, () => uploadCard.classList.add('dragover'), false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                uploadCard.addEventListener(eventName, () => uploadCard.classList.remove('dragover'), false);
+            });
+
+            uploadCard.addEventListener('drop', handleDrop, false);
+        }
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function handleDrop(e) {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                analyzeFile(files[0]);
+            }
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                analyzeFile(file);
+            }
+        }
+
+        async function analyzeFile(file) {
+            console.log(`🎵 Analyzing file: ${file.name}`);
+            
+            // Show progress section
+            document.getElementById('progressSection').style.display = 'block';
+            startTime = Date.now();
+            
+            // Start timer
+            const timerInterval = setInterval(() => {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                document.getElementById('progressTime').textContent = elapsed + 's';
+            }, 100);
+
+            try {
+                // Use visualization manager to analyze
+                const result = await visualizationManager.analyzeFile(file);
+                
+                if (result) {
+                    console.log('✅ Analysis successful');
+                } else {
+                    console.error('❌ Analysis failed');
+                }
+            } catch (error) {
+                console.error('❌ Analysis error:', error);
+            } finally {
+                clearInterval(timerInterval);
+            }
+        }
+
+        function updateProgress(progressData) {
+            const progressFill = document.getElementById('progressFill');
+            const progressStatus = document.getElementById('progressStatus');
+            
+            if (progressData.progress !== undefined) {
+                progressFill.style.width = progressData.progress + '%';
+            }
+            
+            let statusClass = 'progress-status';
+            let message = progressData.message || '';
+            
+            switch (progressData.status) {
+                case 'starting':
+                case 'uploading':
+                    statusClass += ' upload';
+                    break;
+                case 'processing':
+                    statusClass += ' analyzing';
+                    break;
+                case 'complete':
+                    statusClass += ' complete';
+                    break;
+                case 'error':
+                    statusClass += ' error';
+                    break;
+            }
+            
+            progressStatus.className = statusClass;
+            progressStatus.textContent = message;
+        }
+
+        function handleError(error) {
+            console.error('❌ Visualization error:', error);
+            
+            updateProgress({
+                status: 'error',
+                message: `Error: ${error.message}`,
+                progress: 0
+            });
+        }
+
+        function handleComplete(result) {
+            console.log('🎉 Analysis complete:', result);
+            
+            // Show results cards
+            document.getElementById('resultsCard').style.display = 'block';
+            document.getElementById('techCard').style.display = 'block';
+            
+            // Update metric cards
+            updateMetricCards(result.analysis);
+            
+            // Update technical details
+            updateTechnicalDetails(result);
+        }
+
+        function updateMetricCards(analysis) {
+            const container = document.getElementById('metricCards');
+            
+            const metrics = [
+                {
+                    value: analysis.ml_key || analysis.key || 'N/A',
+                    label: 'Musical Key'
+                },
+                {
+                    value: analysis.ml_tempo || analysis.tempo || 'N/A',
+                    label: 'Tempo (BPM)'
+                },
+                {
+                    value: analysis.ml_danceability ? (analysis.ml_danceability * 100).toFixed(0) + '%' : 'N/A',
+                    label: 'Danceability'
+                },
+                {
+                    value: analysis.madmom_downbeat_count || 'N/A',
+                    label: 'Downbeats'
+                },
+                {
+                    value: analysis.madmom_meter_detection || 'N/A',
+                    label: 'Time Signature'
+                },
+                {
+                    value: analysis.response_time ? `${analysis.response_time.toFixed(1)}s` : 'N/A',
+                    label: 'Processing Time'
+                }
+            ];
+            
+            container.innerHTML = metrics.map(metric => `
+                <div class="metric-card">
+                    <div class="metric-value">${metric.value}</div>
+                    <div class="metric-label">${metric.label}</div>
+                </div>
+            `).join('');
+        }
+
+        function updateTechnicalDetails(result) {
+            const viz = result.visualization;
+            
+            document.getElementById('tech-pipeline').textContent = viz.metadata?.extraction_method || 'AudioFlux';
+            document.getElementById('tech-gpu').textContent = result.features?.audioflux_visualization ? '✅' : '❌';
+            document.getElementById('tech-madmom').textContent = viz.downbeats?.integration || 'Hybrid';
+            document.getElementById('tech-sample-rate').textContent = `${viz.waveform?.sample_rate || 22050}Hz`;
+        }
+
+        // Global seek event listener
+        document.addEventListener('visualization-seek', (e) => {
+            console.log(`🎯 Global seek to ${e.detail.time.toFixed(2)}s`);
+        });
+    </script>
+</body>
+</html>

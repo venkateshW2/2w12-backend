@@ -5,7 +5,8 @@ import logging
 import time
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 import torch
 
@@ -110,6 +111,9 @@ if streaming_available:
     app.include_router(streaming_router)
     logger.info("✅ Streaming router included")
 
+# Mount static files for UI components
+app.mount("/ui", StaticFiles(directory="ui"), name="ui-components")
+
 # Serve the streaming test interface
 @app.get("/streaming", response_class=HTMLResponse)
 async def streaming_interface():
@@ -128,6 +132,15 @@ async def new_streaming_interface():
             return HTMLResponse(content=f.read())
     except FileNotFoundError:
         return HTMLResponse(content="<h1>2W12 Audio Analysis interface not found</h1>", status_code=404)
+
+@app.get("/ui/visualization", response_class=HTMLResponse)
+async def visualization_interface():
+    """Serve the NB visualization interface with AudioFlux waveform rendering"""
+    try:
+        with open("streaming_visualization.html", "r") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        return HTMLResponse(content="<h1>NB Visualization interface not found</h1>", status_code=404)
 
 # === DAY 6: ENHANCED ENDPOINTS (NOW WORKING) ===
 
