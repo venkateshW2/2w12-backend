@@ -464,7 +464,12 @@ async def analyze_audio_with_visualization(file: UploadFile = File(...)):
             # Integrate Madmom downbeats into visualization
             madmom_downbeats = result.get('madmom_downbeat_times', [])
             
-            # Enhanced response with visualization
+            # NEW: Phase 2A - Chord progression analysis
+            chord_analysis = enhanced_loader.analyze_chords_with_timeline(
+                audio_data, sr, madmom_downbeats
+            )
+            
+            # Enhanced response with visualization + chords
             return {
                 "success": True,
                 "filename": file.filename,
@@ -477,19 +482,31 @@ async def analyze_audio_with_visualization(file: UploadFile = File(...)):
                         "count": len(madmom_downbeats),
                         "integration": "madmom_audioflux_hybrid"
                     },
+                    "chords": chord_analysis.get('chord_timeline', {}),
                     "timeline": {
                         "duration": visualization_data["waveform"]["duration"],
                         "sample_rate": sr,
                         "total_samples": len(audio_data),
-                        "visualization_points": visualization_data["waveform"]["width"]
+                        "visualization_points": visualization_data["waveform"]["width"],
+                        "layers": {
+                            "waveform": True,
+                            "downbeats": len(madmom_downbeats) > 0,
+                            "chords": chord_analysis.get('chord_status') == 'success'
+                        }
                     }
                 },
-                "api_version": "v3.1_visualization",
+                "api_version": "v3.2_chord_progression",
                 "features": {
                     "audioflux_visualization": True,
                     "madmom_downbeats": True,
+                    "chord_progression": chord_analysis.get('chord_status') == 'success',
                     "canvas_ready": True,
-                    "lightweight_rendering": True
+                    "lightweight_rendering": True,
+                    "sub_beat_resolution": True
+                },
+                "performance": {
+                    "chord_analysis_time": chord_analysis.get('chord_analysis_time', 0),
+                    "chord_detection_method": "audioflux_template_matching"
                 }
             }
             

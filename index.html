@@ -148,7 +148,7 @@
             <div class="bg-white rounded-2xl shadow-lg mb-8 animate-slide-up">
                 <div class="p-6 border-b border-gray-100">
                     <div class="flex items-center justify-between">
-                        <h3 class="text-xl font-semibold text-gray-900">Waveform & Downbeats</h3>
+                        <h3 class="text-xl font-semibold text-gray-900">Waveform, Downbeats & Chords</h3>
                         <div class="flex items-center space-x-4 text-sm text-gray-600">
                             <span id="waveformInfo" class="font-mono">Loading...</span>
                         </div>
@@ -222,6 +222,7 @@
         let waveformCanvas, ctx;
         let waveformData = null;
         let downbeats = [];
+        let chords = [];
         let duration = 0;
         let currentTime = 0;
         let startTime = null;
@@ -378,7 +379,10 @@
                 // Debug: Log the visualization data
                 console.log('🔍 Visualization data received:', result.visualization);
                 console.log('🔍 Waveform peaks sample:', result.visualization?.waveform?.peaks?.slice(0, 10));
+                console.log('🔍 Waveform peaks middle:', result.visualization?.waveform?.peaks?.slice(100, 105));
                 console.log('🔍 Downbeats:', result.visualization?.downbeats?.times?.slice(0, 5));
+                console.log('🔍 Chords detected:', result.visualization?.chords?.events?.length || 0);
+                console.log('🔍 Chord events:', result.visualization?.chords?.events);
                 
                 // Stop timer
                 stopProcessingTimer();
@@ -455,12 +459,13 @@
             // Load waveform data
             waveformData = visualization.waveform;
             downbeats = visualization.downbeats.times || [];
+            chords = visualization.chords?.events || [];
             duration = waveformData.duration;
             currentTime = 0;
             
             // Update info displays
             updateTimeDisplay();
-            document.getElementById('downbeatCount').textContent = `${downbeats.length} downbeats`;
+            document.getElementById('downbeatCount').textContent = `${downbeats.length} downbeats • ${chords.length} chords`;
             document.getElementById('waveformInfo').textContent = `${waveformData.width} points • ${duration.toFixed(1)}s`;
             
             // Update technical info
@@ -519,6 +524,14 @@
             console.log(`🔍 Found ${nonZeroPeaks.length} non-zero peaks out of ${peaks.length} total`);
             if (nonZeroPeaks.length > 0) {
                 console.log(`🔍 Sample non-zero peaks:`, nonZeroPeaks.slice(0, 5));
+                console.log(`🔍 Max peak value:`, Math.max(...peaks));
+                console.log(`🔍 Min peak value:`, Math.min(...peaks));
+            }
+            
+            // Find first non-zero peak for better visualization
+            const firstNonZeroIndex = peaks.findIndex(p => Math.abs(p) > 0.001);
+            if (firstNonZeroIndex > 0) {
+                console.log(`🔍 First non-zero peak at index ${firstNonZeroIndex} (${(firstNonZeroIndex / peaks.length * 100).toFixed(1)}% through file)`);
             }
             
             // Draw waveform
@@ -586,6 +599,40 @@
                 ctx.globalAlpha = 1;
             }
             
+            // Draw chord progression
+            if (chords.length > 0 && duration > 0) {
+                console.log(`🎵 Drawing ${chords.length} chords`);
+                
+                chords.forEach((chord, index) => {
+                    const startX = (chord.start / duration) * width;
+                    const endX = (chord.end / duration) * width;
+                    const chordWidth = endX - startX;
+                    
+                    // Get color based on chord quality
+                    const color = getChordColor(chord.quality);
+                    
+                    // Draw chord block (semi-transparent)
+                    ctx.fillStyle = color + '30';  // 30% opacity
+                    ctx.fillRect(startX, height - 40, chordWidth, 25);
+                    
+                    // Draw chord border
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(startX, height - 40, chordWidth, 25);
+                    
+                    // Draw chord label
+                    if (chordWidth > 30) {  // Only show label if chord is wide enough
+                        ctx.fillStyle = color;
+                        ctx.font = '12px JetBrains Mono';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(chord.chord, startX + chordWidth/2, height - 22);
+                        ctx.textAlign = 'left';  // Reset alignment
+                    }
+                });
+                
+                console.log(`✅ Drew ${chords.length} chord blocks`);
+            }
+            
             // Draw current time cursor
             if (currentTime > 0) {
                 const x = (currentTime / duration) * width;
@@ -611,6 +658,18 @@
             const secs = Math.floor(seconds % 60);
             return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
         }
+        
+        function getChordColor(quality) {
+            const colors = {
+                'major': '#3B82F6',      // Blue
+                'minor': '#EF4444',      // Red
+                'dominant': '#8B5CF6',   // Purple
+                'diminished': '#6B7280', // Gray
+                'augmented': '#F59E0B',  // Orange/Yellow
+                'suspended': '#10B981'   // Green
+            };
+            return colors[quality] || '#6B7280';
+        }
 
         function exportWaveform() {
             if (waveformCanvas) {
@@ -629,6 +688,7 @@
             // Reset data
             waveformData = null;
             downbeats = [];
+            chords = [];
             duration = 0;
             currentTime = 0;
             

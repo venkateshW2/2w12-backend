@@ -150,6 +150,181 @@ class AudioFluxProcessor:
                 "metadata": {"error": str(e), "extraction_method": "failed"}
             }
     
+    def extract_chroma_features(self, audio_data: np.ndarray, sr: int) -> Dict[str, Any]:
+        """
+        Extract chroma features optimized for jazz chord detection
+        Uses 8192 sample frames for better harmonic resolution
+        """
+        try:
+            logger.info(f"🎵 Extracting chroma features for chord detection...")
+            
+            # Optimal settings for jazz chord detection
+            fft_length = 8192      # Better harmonic resolution for complex chords
+            hop_length = 2048      # 46ms hop at 44kHz (good time resolution)
+            
+            # Calculate duration and frame timing
+            duration = len(audio_data) / sr
+            n_frames = len(audio_data) // hop_length
+            times = np.arange(n_frames) * hop_length / sr
+            
+            logger.info(f"🎵 Chroma analysis: {duration:.1f}s audio, {n_frames} frames, {fft_length} FFT size")
+            
+            try:
+                # Use AudioFlux for chroma extraction
+                chroma_processor = af.Spectral(
+                    sample_rate=sr,
+                    fft_length=fft_length,
+                    hop_length=hop_length
+                )
+                
+                # Extract chroma features
+                spectral_features = chroma_processor.spectral(audio_data)
+                
+                # If AudioFlux has direct chroma extraction, use it
+                if hasattr(spectral_features, 'chroma'):
+                    chroma_matrix = spectral_features.chroma
+                else:
+                    # Fallback: compute chroma from spectral data
+                    chroma_matrix = self._compute_chroma_from_spectral(spectral_features, sr)
+                
+                logger.info(f"✅ Chroma extracted: {chroma_matrix.shape if hasattr(chroma_matrix, 'shape') else len(chroma_matrix)} frames")
+                
+            except Exception as e:
+                logger.warning(f"⚠️ AudioFlux chroma fallback: {e}")
+                # Fallback to basic spectral analysis
+                chroma_matrix = self._compute_basic_chroma(audio_data, sr, fft_length, hop_length)
+                
+            # Normalize chroma vectors
+            if isinstance(chroma_matrix, np.ndarray) and len(chroma_matrix.shape) == 2:
+                # Standard 12 x N_frames chroma matrix
+                chroma_normalized = self._normalize_chroma(chroma_matrix)
+            else:
+                # Convert to proper format if needed
+                chroma_normalized = self._format_chroma_matrix(chroma_matrix, n_frames)
+            
+            chroma_features = {
+                "chroma_matrix": chroma_normalized.tolist() if isinstance(chroma_normalized, np.ndarray) else chroma_normalized,
+                "times": times.tolist(),
+                "n_frames": n_frames,
+                "frame_duration": hop_length / sr,
+                "fft_length": fft_length,
+                "hop_length": hop_length,
+                "sample_rate": sr,
+                "total_duration": duration,
+                "extraction_method": "audioflux_optimized"
+            }
+            
+            logger.info(f"✅ Chroma features extracted: {n_frames} frames, {duration:.1f}s duration")
+            return chroma_features
+            
+        except Exception as e:
+            logger.error(f"❌ Chroma extraction failed: {e}")
+            return {
+                "chroma_matrix": [],
+                "times": [],
+                "n_frames": 0,
+                "error": str(e),
+                "extraction_method": "failed"
+            }
+    
+    def _compute_basic_chroma(self, audio_data: np.ndarray, sr: int, fft_length: int, hop_length: int) -> np.ndarray:
+        """Fallback chroma computation using basic spectral analysis"""
+        try:
+            # Simple STFT-based chroma extraction
+            n_frames = len(audio_data) // hop_length
+            chroma_matrix = np.zeros((12, n_frames))
+            
+            # Compute STFT manually
+            for i in range(n_frames):
+                start_idx = i * hop_length
+                end_idx = start_idx + fft_length
+                
+                if end_idx <= len(audio_data):
+                    frame = audio_data[start_idx:end_idx]
+                    
+                    # Apply window
+                    windowed = frame * np.hanning(len(frame))
+                    
+                    # FFT
+                    fft = np.fft.fft(windowed)
+                    magnitude = np.abs(fft[:fft_length//2])
+                    
+                    # Map to chroma bins (simplified)
+                    chroma_frame = self._magnitude_to_chroma(magnitude, sr, fft_length)
+                    chroma_matrix[:, i] = chroma_frame
+            
+            return chroma_matrix
+            
+        except Exception as e:
+            logger.error(f"❌ Basic chroma computation failed: {e}")
+            return np.zeros((12, n_frames))
+    
+    def _magnitude_to_chroma(self, magnitude: np.ndarray, sr: int, fft_length: int) -> np.ndarray:
+        """Convert magnitude spectrum to 12-dimensional chroma vector"""
+        chroma = np.zeros(12)
+        
+        # Frequency bins
+        freqs = np.fft.fftfreq(fft_length, 1/sr)[:len(magnitude)]
+        
+        # Reference frequencies for chromatic scale (C4 = 261.63 Hz)
+        C4 = 261.63
+        chroma_freqs = [C4 * (2 ** (i/12)) for i in range(12)]
+        
+        # Map magnitude to chroma bins
+        for i, freq in enumerate(freqs):
+            if freq > 80 and freq < 2000:  # Focus on musical range
+                # Find closest chroma bin
+                semitone = 12 * np.log2(freq / C4) % 12
+                chroma_bin = int(round(semitone)) % 12
+                chroma[chroma_bin] += magnitude[i]
+        
+        # Normalize
+        if np.sum(chroma) > 0:
+            chroma = chroma / np.sum(chroma)
+        
+        return chroma
+    
+    def _normalize_chroma(self, chroma_matrix: np.ndarray) -> np.ndarray:
+        """Normalize chroma matrix for chord detection"""
+        if len(chroma_matrix.shape) != 2 or chroma_matrix.shape[0] != 12:
+            logger.warning(f"⚠️ Unexpected chroma matrix shape: {chroma_matrix.shape}")
+            return chroma_matrix
+        
+        normalized = chroma_matrix.copy()
+        
+        # Normalize each frame to unit sum
+        for i in range(normalized.shape[1]):
+            frame_sum = np.sum(normalized[:, i])
+            if frame_sum > 0:
+                normalized[:, i] = normalized[:, i] / frame_sum
+        
+        return normalized
+    
+    def _format_chroma_matrix(self, chroma_data, n_frames: int) -> np.ndarray:
+        """Format chroma data into standard 12 x N_frames matrix"""
+        if isinstance(chroma_data, list):
+            # Convert list to numpy array
+            chroma_array = np.array(chroma_data)
+        else:
+            chroma_array = chroma_data
+        
+        # Ensure proper shape
+        if len(chroma_array.shape) == 1:
+            # Single frame, repeat for all frames
+            chroma_matrix = np.tile(chroma_array[:12], (n_frames, 1)).T
+        elif chroma_array.shape[0] == n_frames and chroma_array.shape[1] == 12:
+            # Transpose to 12 x N_frames
+            chroma_matrix = chroma_array.T
+        elif chroma_array.shape[0] == 12:
+            # Already in correct format
+            chroma_matrix = chroma_array
+        else:
+            # Unknown format, create zeros
+            logger.warning(f"⚠️ Unknown chroma format: {chroma_array.shape}")
+            chroma_matrix = np.zeros((12, n_frames))
+        
+        return chroma_matrix
+    
     def comprehensive_audioflux_analysis(self, y: np.ndarray) -> Dict[str, Any]:
         """Comprehensive AudioFlux analysis using v0.1.9 API"""
         try:

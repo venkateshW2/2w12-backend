@@ -8,6 +8,7 @@ import tempfile
 import os
 from typing import Dict, Any, Tuple, List, Optional
 from core.database_manager import SoundToolsDatabase
+from core.chord_processor import ChordProcessor, ChordTimeline
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +103,7 @@ class EnhancedAudioLoader:
         self.madmom_processor = ModelManagerSingleton.get_madmom_processor()
         self.mb_researcher = ModelManagerSingleton.get_musicbrainz_researcher()
         self.audioflux_processor = ModelManagerSingleton.get_audioflux_processor()
+        self.chord_processor = ChordProcessor()  # NEW: Phase 2A chord detection
         
         # Initialize capabilities flags
         self.ml_models_loaded = self.essentia_models and self.essentia_models.models_loaded
@@ -951,4 +953,82 @@ class EnhancedAudioLoader:
                 "duration": len(y) / sr,
                 "librosa_selective_failed": True,
                 "librosa_error": str(e)
+            }
+    
+    def analyze_chords_with_timeline(self, audio_data: np.ndarray, sr: int, 
+                                   downbeats: List[float] = None) -> Dict[str, Any]:
+        """
+        Phase 2A: Chord progression analysis with sub-beat resolution timeline
+        
+        Args:
+            audio_data: Audio samples
+            sr: Sample rate
+            downbeats: Optional downbeat times for musical context
+            
+        Returns:
+            Dictionary with chord timeline and metadata
+        """
+        try:
+            logger.info("🎵 Starting chord progression analysis...")
+            start_time = time.time()
+            
+            # Step 1: Extract chroma features using AudioFlux
+            chroma_features = self.audioflux_processor.extract_chroma_features(audio_data, sr)
+            
+            if chroma_features.get('error'):
+                logger.error(f"❌ Chroma extraction failed: {chroma_features['error']}")
+                return {
+                    'chord_timeline': {'events': [], 'metadata': {'error': 'chroma_extraction_failed'}},
+                    'chord_analysis_time': time.time() - start_time,
+                    'chord_status': 'failed'
+                }
+            
+            # Step 2: Analyze chords using template matching
+            chord_timeline = self.chord_processor.analyze_chords(chroma_features, downbeats)
+            
+            # Step 3: Convert timeline to serializable format
+            chord_events_dict = []
+            for event in chord_timeline.events:
+                event_dict = {
+                    'start': event.start,
+                    'end': event.end,
+                    'chord': event.chord,
+                    'confidence': event.confidence,
+                    'quality': event.quality,
+                    'root': event.root,
+                    'chord_type': event.chord_type,
+                    'inversion': event.inversion,
+                    'downbeat_aligned': event.downbeat_aligned,
+                    'duration': event.end - event.start
+                }
+                chord_events_dict.append(event_dict)
+            
+            analysis_time = time.time() - start_time
+            
+            result = {
+                'chord_timeline': {
+                    'events': chord_events_dict,
+                    'metadata': chord_timeline.metadata,
+                    'total_duration': chord_timeline.total_duration,
+                    'resolution': chord_timeline.resolution
+                },
+                'chord_analysis_time': analysis_time,
+                'chord_status': 'success',
+                'chroma_features': {
+                    'n_frames': chroma_features.get('n_frames', 0),
+                    'frame_duration': chroma_features.get('frame_duration', 0),
+                    'extraction_method': chroma_features.get('extraction_method', 'unknown')
+                }
+            }
+            
+            logger.info(f"✅ Chord analysis complete: {len(chord_events_dict)} chords in {analysis_time:.2f}s")
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Chord analysis failed: {e}")
+            return {
+                'chord_timeline': {'events': [], 'metadata': {'error': str(e)}},
+                'chord_analysis_time': time.time() - start_time,
+                'chord_status': 'failed',
+                'error': str(e)
             }
