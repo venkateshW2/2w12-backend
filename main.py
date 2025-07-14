@@ -514,9 +514,18 @@ async def streaming_interface():
     except FileNotFoundError:
         return HTMLResponse(content="<h1>Streaming interface not found</h1>", status_code=404)
 
-# Root endpoint
-@app.get("/")
-async def root():
+@app.get("/", response_class=HTMLResponse)
+async def root_interface():
+    """Serve the master index.html interface with clean gray/white design"""
+    try:
+        with open("index.html", "r") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        return HTMLResponse(content="<h1>Master interface not found</h1>", status_code=404)
+
+# API root endpoint
+@app.get("/api")
+async def api_root():
     """API root with complete feature status"""
     
     # Get real-time status

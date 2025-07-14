@@ -54,9 +54,21 @@ class AudioFluxProcessor:
         """
         try:
             logger.info(f"📊 Extracting visualization data (target width: {target_width})")
+            logger.info(f"🔍 Audio data shape: {audio_data.shape if hasattr(audio_data, 'shape') else len(audio_data)}")
+            logger.info(f"🔍 Audio data type: {audio_data.dtype if hasattr(audio_data, 'dtype') else type(audio_data)}")
+            logger.info(f"🔍 Audio data range: min={np.min(audio_data):.4f}, max={np.max(audio_data):.4f}")
             
             # Calculate duration
             duration = len(audio_data) / sr
+            
+            # Normalize audio data to ensure we have proper amplitude values
+            if audio_data.dtype != np.float32:
+                audio_data = audio_data.astype(np.float32)
+            
+            # Ensure audio is normalized to [-1, 1] range
+            max_val = np.max(np.abs(audio_data))
+            if max_val > 0:
+                audio_data = audio_data / max_val
             
             # Downsample for Canvas rendering (1920px = common screen width)
             if len(audio_data) > target_width:
@@ -70,12 +82,17 @@ class AudioFluxProcessor:
                     chunk = audio_data[i:i+chunk_size]
                     if len(chunk) > 0:
                         # Extract peaks and valleys for waveform
-                        peaks.append(float(np.max(chunk)))
-                        valleys.append(float(np.min(chunk)))
+                        peak_val = float(np.max(chunk))
+                        valley_val = float(np.min(chunk))
+                        
+                        peaks.append(peak_val)
+                        valleys.append(valley_val)
                         
                         # RMS for dynamic visualization
                         rms = np.sqrt(np.mean(chunk**2))
                         rms_values.append(float(rms))
+                
+                logger.info(f"📊 Sample waveform data: peaks[0:3]={peaks[:3]}, valleys[0:3]={valleys[:3]}")
             else:
                 # For small files, use direct data
                 peaks = audio_data.tolist()
