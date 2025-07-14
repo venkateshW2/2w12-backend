@@ -290,10 +290,26 @@
 
         function setupWaveformCanvas() {
             waveformCanvas = document.getElementById('waveformCanvas');
-            ctx = waveformCanvas.getContext('2d');
+            console.log('🔧 Canvas element found:', !!waveformCanvas);
             
-            // Set canvas size to match container
-            resizeCanvas();
+            if (!waveformCanvas) {
+                console.error('❌ Canvas element not found!');
+                return;
+            }
+            
+            ctx = waveformCanvas.getContext('2d');
+            console.log('🔧 Canvas context created:', !!ctx);
+            
+            // Set a fixed size first to test
+            waveformCanvas.width = 800;
+            waveformCanvas.height = 200;
+            waveformCanvas.style.width = '100%';
+            waveformCanvas.style.height = '200px';
+            
+            console.log('🔧 Canvas size set to:', waveformCanvas.width, 'x', waveformCanvas.height);
+            
+            // Context is ready
+            console.log('🔧 Canvas setup complete');
             
             // Handle window resize
             window.addEventListener('resize', resizeCanvas);
@@ -303,20 +319,13 @@
         }
 
         function resizeCanvas() {
-            const container = waveformCanvas.parentElement;
-            const rect = container.getBoundingClientRect();
+            if (!waveformCanvas || !ctx) {
+                console.log('🔧 Canvas or context not available for resize');
+                return;
+            }
             
-            // Set display size
-            waveformCanvas.style.width = '100%';
-            waveformCanvas.style.height = '200px';
-            
-            // Set actual canvas size for drawing (high DPI)
-            const dpr = window.devicePixelRatio || 1;
-            waveformCanvas.width = rect.width * dpr;
-            waveformCanvas.height = 200 * dpr;
-            
-            // Scale context for high DPI
-            ctx.scale(dpr, dpr);
+            // Don't resize for now - keep fixed size to test
+            console.log('🔧 Resize called - keeping fixed size for testing');
             
             // Redraw if we have data
             if (waveformData) {
@@ -481,8 +490,29 @@
         }
 
         function createMetrics(analysis) {
+            // Calculate Camelot wheel position
+            const keyToCamelot = {
+                'C major': '8B', 'C minor': '5A',
+                'C# major': '3B', 'C# minor': '12A', 'Db major': '3B', 'Db minor': '12A',
+                'D major': '10B', 'D minor': '7A',
+                'D# major': '5B', 'D# minor': '2A', 'Eb major': '5B', 'Eb minor': '2A',
+                'E major': '12B', 'E minor': '9A',
+                'F major': '7B', 'F minor': '4A',
+                'F# major': '2B', 'F# minor': '11A', 'Gb major': '2B', 'Gb minor': '11A',
+                'G major': '9B', 'G minor': '6A',
+                'G# major': '4B', 'G# minor': '1A', 'Ab major': '4B', 'Ab minor': '1A',
+                'A major': '11B', 'A minor': '8A',
+                'A# major': '6B', 'A# minor': '3A', 'Bb major': '6B', 'Bb minor': '3A',
+                'B major': '1B', 'B minor': '10A'
+            };
+            
+            const fullKey = analysis.ml_full_key || `${analysis.ml_key || ''} ${analysis.ml_mode || ''}`.trim();
+            const camelotKey = keyToCamelot[fullKey] || 'N/A';
+            
             const metrics = [
                 { label: 'Key', value: analysis.ml_key || analysis.key || 'N/A' },
+                { label: 'Scale', value: analysis.ml_mode || 'N/A' },
+                { label: 'Camelot', value: camelotKey },
                 { label: 'Tempo', value: analysis.ml_tempo || analysis.tempo || 'N/A' },
                 { label: 'Danceability', value: analysis.ml_danceability ? `${(analysis.ml_danceability * 100).toFixed(0)}%` : 'N/A' },
                 { label: 'Time Signature', value: analysis.madmom_meter_detection || 'N/A' },
@@ -500,70 +530,63 @@
         }
 
         function drawWaveform() {
+            console.log('🎨 drawWaveform() called');
+            
             if (!waveformData || !waveformData.peaks) {
                 console.log('⚠️ No waveform data to draw');
                 return;
             }
             
-            const rect = waveformCanvas.getBoundingClientRect();
-            const width = rect.width;
-            const height = 200;
+            // SIMPLE APPROACH: Get canvas actual dimensions
+            const width = waveformCanvas.width;
+            const height = waveformCanvas.height;
             
-            console.log(`🎨 Drawing waveform: ${waveformData.peaks.length} points on ${width}x${height} canvas`);
+            console.log(`🎨 Drawing on ${width}x${height} canvas with ${waveformData.peaks.length} peaks`);
             
-            // Clear canvas
-            ctx.fillStyle = '#f9fafb';
+            // Clear canvas with white background
+            ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, width, height);
             
             const centerY = height / 2;
             const peaks = waveformData.peaks;
-            const valleys = waveformData.valleys || peaks.map(p => -Math.abs(p));
             
             // Debug: Log some peak values
             const nonZeroPeaks = peaks.filter(p => Math.abs(p) > 0.001);
             console.log(`🔍 Found ${nonZeroPeaks.length} non-zero peaks out of ${peaks.length} total`);
-            if (nonZeroPeaks.length > 0) {
-                console.log(`🔍 Sample non-zero peaks:`, nonZeroPeaks.slice(0, 5));
-                console.log(`🔍 Max peak value:`, Math.max(...peaks));
-                console.log(`🔍 Min peak value:`, Math.min(...peaks));
-            }
             
-            // Find first non-zero peak for better visualization
-            const firstNonZeroIndex = peaks.findIndex(p => Math.abs(p) > 0.001);
-            if (firstNonZeroIndex > 0) {
-                console.log(`🔍 First non-zero peak at index ${firstNonZeroIndex} (${(firstNonZeroIndex / peaks.length * 100).toFixed(1)}% through file)`);
-            }
-            
-            // Draw waveform
+            // BETTER WAVEFORM: Draw as filled area
             if (peaks.length > 0) {
-                ctx.strokeStyle = '#6b7280';
-                ctx.lineWidth = 1;
-                ctx.fillStyle = '#9ca3af20';
+                // Find non-zero peaks for better scaling
+                const nonZeroPeaks = peaks.filter(p => Math.abs(p) > 0.001);
+                const maxPeak = nonZeroPeaks.length > 0 ? Math.max(...nonZeroPeaks.map(p => Math.abs(p))) : Math.max(...peaks.map(p => Math.abs(p)));
+                const scale = maxPeak > 0 ? 80 / maxPeak : 1000; // Much bigger scale if peaks are tiny
                 
+                console.log(`🎨 Max peak: ${maxPeak.toFixed(6)}, scale: ${scale.toFixed(2)}, non-zero peaks: ${nonZeroPeaks.length}`);
+                
+                // Draw waveform as filled shape
+                ctx.fillStyle = '#0066cc40'; // Semi-transparent blue
+                ctx.strokeStyle = '#0066cc';
+                ctx.lineWidth = 1;
                 ctx.beginPath();
                 
-                // Draw peaks
+                // Start from bottom left
+                ctx.moveTo(0, centerY);
+                
+                // Draw top edge (peaks)
                 for (let i = 0; i < peaks.length; i++) {
                     const x = (i / peaks.length) * width;
-                    const y = centerY - (peaks[i] * centerY * 0.8);
-                    
-                    if (i === 0) {
-                        ctx.moveTo(x, y);
-                    } else {
-                        ctx.lineTo(x, y);
-                    }
-                }
-                
-                // Draw valleys (reverse)
-                for (let i = peaks.length - 1; i >= 0; i--) {
-                    const x = (i / peaks.length) * width;
-                    const y = centerY - (valleys[i] * centerY * 0.8);
+                    const y = centerY - (peaks[i] * scale);
                     ctx.lineTo(x, y);
                 }
                 
+                // Draw to bottom right and back to start
+                ctx.lineTo(width, centerY);
+                ctx.lineTo(0, centerY);
                 ctx.closePath();
+                
                 ctx.fill();
                 ctx.stroke();
+                console.log(`🎨 Drew filled waveform`);
             }
             
             // Draw center line
@@ -574,63 +597,70 @@
             ctx.lineTo(width, centerY);
             ctx.stroke();
             
-            // Draw downbeats
+            // DAW-STYLE TIMELINE: Thin black downbeat lines
             if (downbeats.length > 0 && duration > 0) {
-                ctx.strokeStyle = '#ef4444';
-                ctx.lineWidth = 2;
-                ctx.globalAlpha = 0.8;
+                console.log(`🥁 Drawing ${downbeats.length} downbeats as timeline`);
+                
+                ctx.strokeStyle = '#333333';
+                ctx.lineWidth = 1;
                 
                 downbeats.forEach((beatTime, index) => {
                     const x = (beatTime / duration) * width;
-                    
                     ctx.beginPath();
                     ctx.moveTo(x, 0);
                     ctx.lineTo(x, height);
                     ctx.stroke();
                     
-                    // Beat numbers (every 4th)
+                    // Add beat numbers every 4 beats (bars)
                     if (index % 4 === 0) {
-                        ctx.fillStyle = '#ef4444';
-                        ctx.font = '10px JetBrains Mono';
-                        ctx.fillText(`${index + 1}`, x + 2, 15);
+                        ctx.fillStyle = '#333333';
+                        ctx.font = '10px Arial';
+                        ctx.fillText(`${Math.floor(index/4) + 1}`, x + 2, 12);
                     }
                 });
                 
-                ctx.globalAlpha = 1;
+                console.log(`✅ Drew timeline with ${downbeats.length} beats`);
             }
             
-            // Draw chord progression
+            // CHORD DEBUGGING: Check what we actually have
             if (chords.length > 0 && duration > 0) {
-                console.log(`🎵 Drawing ${chords.length} chords`);
+                console.log(`🎵 Drawing ${chords.length} chords, duration: ${duration}s`);
+                console.log(`🎵 First chord sample:`, chords[0]);
                 
                 chords.forEach((chord, index) => {
+                    // Debug each chord
+                    if (index < 3) {
+                        console.log(`🎵 Chord ${index}: "${chord.chord}" from ${chord.start}s to ${chord.end}s`);
+                    }
+                    
                     const startX = (chord.start / duration) * width;
                     const endX = (chord.end / duration) * width;
                     const chordWidth = endX - startX;
                     
-                    // Get color based on chord quality
-                    const color = getChordColor(chord.quality);
+                    console.log(`🎵 Chord ${index} position: x=${startX.toFixed(1)} width=${chordWidth.toFixed(1)}`);
                     
-                    // Draw chord block (semi-transparent)
-                    ctx.fillStyle = color + '30';  // 30% opacity
-                    ctx.fillRect(startX, height - 40, chordWidth, 25);
+                    // Draw chord rectangle with border for visibility
+                    ctx.fillStyle = '#0066cc';
+                    ctx.fillRect(startX, height - 40, chordWidth, 30);
                     
-                    // Draw chord border
-                    ctx.strokeStyle = color;
-                    ctx.lineWidth = 1;
-                    ctx.strokeRect(startX, height - 40, chordWidth, 25);
+                    // Draw border
+                    ctx.strokeStyle = '#003399';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(startX, height - 40, chordWidth, 30);
                     
-                    // Draw chord label
-                    if (chordWidth > 30) {  // Only show label if chord is wide enough
-                        ctx.fillStyle = color;
-                        ctx.font = '12px JetBrains Mono';
+                    // Draw chord label in white
+                    if (chordWidth > 15) {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.font = 'bold 14px Arial';
                         ctx.textAlign = 'center';
-                        ctx.fillText(chord.chord, startX + chordWidth/2, height - 22);
-                        ctx.textAlign = 'left';  // Reset alignment
+                        ctx.fillText(chord.chord, startX + chordWidth/2, height - 20);
+                        ctx.textAlign = 'left';
                     }
                 });
                 
                 console.log(`✅ Drew ${chords.length} chord blocks`);
+            } else {
+                console.log(`⚠️ No chords to draw: count=${chords.length}, duration=${duration}`);
             }
             
             // Draw current time cursor

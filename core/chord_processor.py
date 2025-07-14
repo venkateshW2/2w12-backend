@@ -44,9 +44,9 @@ class ChordProcessor:
     def __init__(self):
         self.chord_templates = {}
         self.chroma_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-        self.min_confidence = 0.6      # Minimum confidence for chord detection
-        self.min_chord_duration = 0.5  # Minimum chord duration in seconds
-        self.smoothing_window = 3      # Frames for temporal smoothing
+        self.min_confidence = 0.75     # Higher confidence threshold for fewer chords
+        self.min_chord_duration = 2.0  # Longer minimum duration (2 seconds)
+        self.smoothing_window = 5      # More smoothing to reduce rapid changes
         
         self._initialize_chord_templates()
         logger.info("🎵 ChordProcessor initialized with 48 chord templates")
