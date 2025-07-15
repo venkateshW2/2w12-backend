@@ -438,6 +438,36 @@
                     console.log('   ⚡ Efficiency:', result.analysis.content_analysis.efficiency_stats);
                 }
                 
+                // INDIVIDUAL REGION ANALYSIS RESULTS
+                if (result.analysis?.region_analysis) {
+                    console.log('\n🔍 INDIVIDUAL REGION ANALYSIS:');
+                    console.log('   📊 Region analysis enabled:', result.analysis.region_analysis.enabled);
+                    console.log('   🎵 Total regions:', result.analysis.region_analysis.total_regions);
+                    console.log('   ⚡ Architecture:', result.analysis.region_analysis.architecture);
+                    
+                    if (result.analysis.region_analysis.regions && result.analysis.region_analysis.regions.length > 0) {
+                        console.log('   📋 Region breakdown:');
+                        result.analysis.region_analysis.regions.forEach((region, i) => {
+                            const info = region.region_info;
+                            const results = region.analysis_results;
+                            console.log(`      Region ${info.region_number}: ${info.start_time.toFixed(1)}s-${info.end_time.toFixed(1)}s | ${info.content_type.toUpperCase()}`);
+                            
+                            if (results.key_detection) {
+                                console.log(`         🎹 Key: ${results.key_detection.key} (${results.key_detection.confidence.toFixed(2)})`);
+                            }
+                            if (results.tempo_detection) {
+                                console.log(`         🥁 Tempo: ${results.tempo_detection.tempo.toFixed(1)} BPM`);
+                            }
+                            if (results.downbeat_detection) {
+                                console.log(`         🎵 Downbeats: ${results.downbeat_detection.downbeat_count} (${results.downbeat_detection.meter})`);
+                            }
+                            if (region.performance) {
+                                console.log(`         ⚡ Performance: ${region.performance.analysis_time}s (${region.performance.realtime_factor.toFixed(2)}x realtime)`);
+                            }
+                        });
+                    }
+                }
+                
                 // Stop timer
                 stopProcessingTimer();
                 

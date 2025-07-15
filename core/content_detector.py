@@ -30,8 +30,8 @@ class ContentDetector:
     def __init__(self, min_duration: float = 3.0):
         self.min_duration = min_duration  # Minimum region duration (3 seconds)
         self.silence_threshold = -40      # dB threshold for silence detection
-        self.energy_threshold = 0.01      # RMS energy threshold for music
-        self.spectral_threshold = 0.1     # Spectral complexity threshold
+        self.energy_threshold = 0.005     # Lower RMS energy threshold for music (more inclusive)
+        self.spectral_threshold = 0.05    # Lower spectral complexity threshold (more inclusive)
         
         logger.info(f"🎵 ContentDetector initialized with {min_duration}s minimum duration")
     
@@ -279,9 +279,9 @@ class ContentDetector:
                 return 'noise', 0.8, False
         
         else:
-            # Medium complexity - could be music
+            # Medium complexity - could be music (more inclusive)
             confidence = (complexity + energy) / 2
-            should_analyze = confidence > 0.3
+            should_analyze = confidence > 0.2  # Lower threshold for more inclusive analysis
             return 'music', confidence, should_analyze
     
     def get_musical_regions_only(self, content_regions: List[ContentRegion]) -> List[ContentRegion]:

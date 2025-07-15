@@ -119,12 +119,52 @@ class ContentRegion:
 - ✅ **Server running**: Ready for testing with real stem files
 - ⚠️ **Upload optimization**: Needed for very large files
 
+## Implementation Roadmap
+
+### **Phase 1: Robust Content-Aware Analysis** (IN PROGRESS)
+- ✅ Content detection foundation working
+- 🔧 **Individual region analysis** - Each region gets separate key/tempo/downbeats
+- 🔧 **ML content classification** - Neural network + pre-trained models (no librosa)
+- 🔧 **Enhanced content types** - Music, Silence, Speech, Noise, Sound FX, Voice, Instruments, Ambience
+- 🔧 **Per-region results structure** - Complete analysis object per region
+
+### **Phase 2: Playback + Region Interaction** (PLANNED)
+- 🎯 **Hybrid playback approach** - Server streaming + client controls
+- 🎯 **Interactive waveform** - Clickable regions with zoom/jump functionality
+- 🎯 **Region navigation** - Timeline/tabs for region results display
+- 🎯 **Audio controls** - Play/pause/seek with region synchronization
+
+### **Phase 3: Chord Implementation** (PLANNED)
+- 🎯 **AudioFlux chroma extraction** - Per-region chord analysis
+- 🎯 **Template matching system** - 48 chord types with confidence scoring
+- 🎯 **Region-based chord detection** - Individual chord progressions per region
+- 🎯 **Timeline integration** - Chord visualization within region playback
+
+## Chord Implementation Research Summary
+
+### **Technical Approach (From Previous Sessions):**
+- **AudioFlux Chroma**: 8192 FFT frames for harmonic resolution
+- **Template Matching**: 48 chord templates (major, minor, 7th, diminished, augmented, suspended)
+- **Sub-beat Timeline**: 100ms resolution for precise chord detection
+- **Performance**: ~1.6s chord analysis per region
+
+### **Chord Detection Capabilities:**
+- **Basic**: Major, minor, diminished, augmented triads
+- **7th Chords**: Dominant 7, major 7, minor 7, diminished 7, half-diminished 7
+- **Extended**: Minor-major 7, augmented 7, suspended 2/4
+- **Jazz Support**: Complex chords with confidence scoring
+
+### **Integration Strategy:**
+```
+Per Region: Audio → AudioFlux Chroma → Template Matching → Chord Timeline
+Combined: All regions → Regional chord progressions → Global analysis
+```
+
 ## Next Steps
-1. **Region-based analysis results** - Individual key/tempo per musical region
-2. **Waveform region markers** - Visual indicators of analyzed regions
-3. **Client-side silence removal** - Reduce upload time for large files
-4. **Playback implementation** - Stream audio with region navigation
-5. **Content classification refinement** - Better stem vs song detection
+1. **Per-region analysis implementation** - Individual analysis per detected region
+2. **ML content classification** - Neural network + pre-trained models
+3. **Results structure enhancement** - Region-based response format
+4. **Playback system architecture** - Server streaming + client controls
 
 ## Files Modified
 - `core/content_detector.py` (NEW)

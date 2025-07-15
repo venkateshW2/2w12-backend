@@ -309,19 +309,39 @@ class EnhancedAudioLoader:
                 print(f"   ✅ Segment: {region.start:.1f}s - {region.end:.1f}s ({region.duration:.1f}s) | {region.content_type}")
                 logger.info(f"🎵 Musical segment: {region.start:.1f}s - {region.end:.1f}s ({region.duration:.1f}s)")
             
-            # Concatenate all musical segments for analysis
-            if len(musical_audio_segments) > 1:
-                musical_audio = np.concatenate(musical_audio_segments)
-                print(f"   🔗 Concatenated {len(musical_audio_segments)} segments → {total_musical_duration:.1f}s total musical content")
-                logger.info(f"🔗 Concatenated {len(musical_audio_segments)} musical segments → {total_musical_duration:.1f}s total")
-            elif len(musical_audio_segments) == 1:
-                musical_audio = musical_audio_segments[0]
-                print(f"   🎵 Single musical segment: {total_musical_duration:.1f}s")
-                logger.info(f"🎵 Single musical segment: {total_musical_duration:.1f}s")
-            else:
+            # INDIVIDUAL REGION ANALYSIS (No concatenation - analyze each region separately)
+            if len(musical_audio_segments) == 0:
                 print(f"   ⚠️ NO MUSICAL CONTENT DETECTED - Skipping analysis")
                 logger.warning("⚠️ No musical content detected - analysis skipped")
                 return {"error": "No musical content detected"}
+            
+            print(f"\n🔍 PREPARING INDIVIDUAL REGION ANALYSIS:")
+            print(f"   📊 Total musical regions: {len(musical_audio_segments)}")
+            print(f"   ⚡ Each region will be analyzed separately")
+            print(f"   🎵 Total musical content: {total_musical_duration:.1f}s")
+            
+            # Store region data for individual analysis
+            region_analysis_data = []
+            for i, (region, audio_segment) in enumerate(zip(musical_regions, musical_audio_segments)):
+                region_data = {
+                    'region_index': i,
+                    'region': region,
+                    'audio_segment': audio_segment,
+                    'start_time': region.start,
+                    'end_time': region.end,
+                    'duration': region.duration,
+                    'content_type': region.content_type
+                }
+                region_analysis_data.append(region_data)
+                print(f"   📋 Region {i+1}: {region.start:.1f}s-{region.end:.1f}s ({region.duration:.1f}s) | {region.content_type}")
+            
+            # For now, still create concatenated audio for backward compatibility
+            # TODO: Remove this once full per-region analysis is implemented
+            if len(musical_audio_segments) > 1:
+                musical_audio = np.concatenate(musical_audio_segments)
+                logger.info(f"🔗 Concatenated {len(musical_audio_segments)} segments for backward compatibility")
+            else:
+                musical_audio = musical_audio_segments[0]
             
             # Check if we need chunking for large files (based on musical content only)
             should_chunk = self._should_use_chunking(musical_audio, sr, file_info)
@@ -335,9 +355,21 @@ class EnhancedAudioLoader:
             print(f"\n🚀 ANALYZING {total_musical_duration:.1f}s MUSICAL CONTENT (saved {(len(y)/sr - total_musical_duration):.1f}s)")
             logger.info(f"🎵 Content-aware analysis for {total_musical_duration:.1f}s musical content (vs {len(y)/sr:.1f}s total)")
             
-            # PARALLEL ANALYSIS PIPELINE - Run all analyses on MUSICAL CONTENT ONLY
-            logger.info("🚀 Starting content-aware parallel analysis pipeline...")
+            # INDIVIDUAL REGION ANALYSIS - New architecture
+            print(f"\n🔍 STARTING INDIVIDUAL REGION ANALYSIS:")
             parallel_start = time.time()
+            
+            # Analyze each region separately
+            region_results = []
+            for i, region_data in enumerate(region_analysis_data):
+                region_result = self._analyze_individual_region(region_data, sr, i+1)
+                region_results.append(region_result)
+                print(f"   ✅ Region {i+1} analysis complete")
+            
+            # PARALLEL ANALYSIS PIPELINE - Run all analyses on MUSICAL CONTENT ONLY (for backward compatibility)
+            logger.info("🚀 Starting content-aware parallel analysis pipeline...")
+            
+            # TODO: Replace this with region-based analysis only
             
             # Use ThreadPoolExecutor for parallel execution (no asyncio conflicts)
             import concurrent.futures
@@ -435,6 +467,15 @@ class EnhancedAudioLoader:
             
             # Convert numpy types to JSON-serializable types
             comprehensive_result = convert_numpy_types(comprehensive_result)
+            
+            # Add region results to comprehensive result
+            comprehensive_result["region_analysis"] = {
+                "enabled": True,
+                "total_regions": len(region_results),
+                "regions": region_results,
+                "total_musical_duration": total_musical_duration,
+                "architecture": "individual_region_analysis"
+            }
             
             return comprehensive_result
             
@@ -1181,4 +1222,120 @@ class EnhancedAudioLoader:
                 'chord_analysis_time': time.time() - start_time,
                 'chord_status': 'failed',
                 'error': str(e)
+            }
+
+    def _analyze_individual_region(self, region_data: Dict[str, Any], sr: int, region_number: int) -> Dict[str, Any]:
+        """
+        Analyze a single region individually - each region gets its own complete analysis
+        """
+        region = region_data['region']
+        audio_segment = region_data['audio_segment']
+        start_time = region_data['start_time']
+        end_time = region_data['end_time']
+        duration = region_data['duration']
+        content_type = region_data['content_type']
+        
+        print(f"      🔍 Region {region_number}: Analyzing {duration:.1f}s of {content_type} content")
+        
+        region_start_time = time.time()
+        
+        try:
+            # Individual region analysis pipeline
+            region_result = {
+                'region_info': {
+                    'region_number': region_number,
+                    'start_time': start_time,
+                    'end_time': end_time,
+                    'duration': duration,
+                    'content_type': content_type,
+                    'confidence': region.confidence,
+                    'energy_level': region.energy_level,
+                    'spectral_complexity': region.spectral_complexity
+                },
+                'analysis_results': {}
+            }
+            
+            # Run analysis based on content type
+            if content_type in ['music', 'instruments']:
+                # Full musical analysis for musical content
+                print(f"         🎵 Full musical analysis for {content_type}")
+                
+                # Key detection
+                ml_analysis = self._essentia_ml_analysis(audio_segment, sr)
+                region_result['analysis_results']['key_detection'] = {
+                    'key': ml_analysis.get('ml_key', 'Unknown'),
+                    'confidence': ml_analysis.get('ml_key_confidence', 0.0)
+                }
+                
+                # Tempo detection
+                region_result['analysis_results']['tempo_detection'] = {
+                    'tempo': ml_analysis.get('ml_tempo', 120.0),
+                    'confidence': ml_analysis.get('ml_tempo_confidence', 0.0)
+                }
+                
+                # Downbeat detection (adjust timestamps to global timeline)
+                madmom_analysis = self._madmom_content_aware_analysis(audio_segment, sr, [region])
+                if madmom_analysis.get('madmom_downbeat_times'):
+                    # Adjust downbeat times to global timeline
+                    adjusted_downbeats = [t + start_time for t in madmom_analysis['madmom_downbeat_times']]
+                    region_result['analysis_results']['downbeat_detection'] = {
+                        'downbeat_times': adjusted_downbeats,
+                        'downbeat_count': len(adjusted_downbeats),
+                        'meter': madmom_analysis.get('madmom_meter_detection', '4/4')
+                    }
+                
+                # Danceability
+                region_result['analysis_results']['danceability'] = {
+                    'score': ml_analysis.get('ml_danceability', 0.5),
+                    'confidence': ml_analysis.get('ml_danceability_confidence', 0.0)
+                }
+                
+            elif content_type == 'speech':
+                # Speech-specific analysis
+                print(f"         🗣️ Speech analysis for {content_type}")
+                region_result['analysis_results']['speech_analysis'] = {
+                    'detected': True,
+                    'confidence': region.confidence
+                }
+                
+            elif content_type == 'noise':
+                # Noise analysis
+                print(f"         🔊 Noise analysis for {content_type}")
+                region_result['analysis_results']['noise_analysis'] = {
+                    'detected': True,
+                    'energy_level': region.energy_level
+                }
+                
+            else:
+                # Basic analysis for other content types
+                print(f"         📊 Basic analysis for {content_type}")
+                region_result['analysis_results']['basic_analysis'] = {
+                    'content_type': content_type,
+                    'confidence': region.confidence
+                }
+            
+            # Add timing information
+            region_analysis_time = time.time() - region_start_time
+            region_result['performance'] = {
+                'analysis_time': round(region_analysis_time, 3),
+                'realtime_factor': round(region_analysis_time / duration, 3) if duration > 0 else 0
+            }
+            
+            print(f"         ⚡ Region {region_number} completed in {region_analysis_time:.2f}s")
+            
+            return region_result
+            
+        except Exception as e:
+            print(f"         ❌ Region {region_number} analysis failed: {str(e)}")
+            return {
+                'region_info': {
+                    'region_number': region_number,
+                    'start_time': start_time,
+                    'end_time': end_time,
+                    'duration': duration,
+                    'content_type': content_type,
+                    'error': str(e)
+                },
+                'analysis_results': {},
+                'performance': {'analysis_time': 0, 'realtime_factor': 0}
             }
