@@ -18,11 +18,20 @@
                         'slide-up': 'slideUp 0.4s ease-out',
                         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
                         'progress': 'progress 0.3s ease-out',
+                        'glitch': 'glitch 2s infinite linear alternate-reverse',
                     },
                     keyframes: {
                         fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
                         slideUp: { '0%': { transform: 'translateY(20px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
-                        progress: { '0%': { transform: 'scaleX(0)' }, '100%': { transform: 'scaleX(1)' } }
+                        progress: { '0%': { transform: 'scaleX(0)' }, '100%': { transform: 'scaleX(1)' } },
+                        glitch: {
+                            '0%': { transform: 'translate(0)' },
+                            '20%': { transform: 'translate(-2px, 2px)' },
+                            '40%': { transform: 'translate(-2px, -2px)' },
+                            '60%': { transform: 'translate(2px, 2px)' },
+                            '80%': { transform: 'translate(2px, -2px)' },
+                            '100%': { transform: 'translate(0)' }
+                        }
                     }
                 }
             }
@@ -37,8 +46,9 @@
         
         <!-- Header -->
         <header class="text-center mb-12 animate-fade-in">
-            <h1 class="text-4xl lg:text-5xl font-bold text-gray-900 mb-4 tracking-tight">
-                2W12 Audio Analysis
+            <h1 class="text-4xl lg:text-5xl font-bold text-gray-900 mb-4 tracking-tight relative">
+                <span class="relative z-10">2W12 Audio Analysis</span>
+                <span class="absolute top-0 left-0 w-full h-full text-blue-600 opacity-20 animate-glitch" style="clip-path: polygon(0 0, 100% 0, 100% 45%, 0 45%);">2W12 Audio Analysis</span>
             </h1>
             <p class="text-xl text-gray-600 font-light max-w-2xl mx-auto leading-relaxed">
                 Professional audio analysis with real-time waveform visualization and precise downbeat detection
@@ -95,6 +105,7 @@
                             <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
                         </div>
                         <span id="processingTime" class="text-sm font-mono text-gray-600">0.0s</span>
+                        <span id="uploadProgress" class="text-sm text-blue-600 hidden">Uploading...</span>
                     </div>
                 </div>
                 
@@ -196,14 +207,24 @@
                 </div>
             </div>
 
-            <!-- Region Cards Grid -->
+            <!-- Region Cards with Tab System -->
             <div id="regionCardsSection" class="mb-8 animate-slide-up">
                 <div class="mb-6">
                     <h3 class="text-2xl font-semibold text-gray-900 mb-2">Region Analysis</h3>
-                    <p class="text-gray-600">Individual analysis results for each detected region</p>
+                    <p class="text-gray-600">Click on a region tab to view detailed analysis</p>
                 </div>
-                <div id="regionCardsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                
+                <!-- Region Tabs -->
+                <div id="regionTabs" class="flex flex-wrap gap-2 mb-6 border-b border-gray-200">
                     <!-- Populated by JavaScript -->
+                </div>
+                
+                <!-- Active Region Card -->
+                <div id="activeRegionCard" class="bg-white rounded-lg shadow-md border border-gray-200 p-6">
+                    <div class="text-center text-gray-500 py-8">
+                        <div class="text-4xl mb-4">🎵</div>
+                        <p>Select a region tab to view analysis details</p>
+                    </div>
                 </div>
             </div>
 
@@ -274,10 +295,13 @@
                 document.getElementById('fileInput').click();
             });
             
-            // Change file button handler
-            document.getElementById('changeFileBtn').addEventListener('click', () => {
-                document.getElementById('fileInput').click();
-            });
+            // Change file button handler (only if exists)
+            const changeFileBtn = document.getElementById('changeFileBtn');
+            if (changeFileBtn) {
+                changeFileBtn.addEventListener('click', () => {
+                    document.getElementById('fileInput').click();
+                });
+            }
 
             // File input change handler
             document.getElementById('fileInput').addEventListener('change', handleFileSelect);
@@ -305,7 +329,6 @@
 
             // Control buttons
             document.getElementById('exportBtn').addEventListener('click', exportWaveform);
-            document.getElementById('resetBtn').addEventListener('click', resetAnalysis);
         }
 
         function preventDefaults(e) {
@@ -394,6 +417,15 @@
             // Update file info
             document.getElementById('currentFileName').textContent = file.name;
             document.getElementById('currentFileInfo').textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB • Processing...`;
+            
+            // Add change file button handler now that element exists
+            const changeFileBtn = document.getElementById('changeFileBtn');
+            if (changeFileBtn && !changeFileBtn.hasAttribute('data-handler-added')) {
+                changeFileBtn.addEventListener('click', () => {
+                    document.getElementById('fileInput').click();
+                });
+                changeFileBtn.setAttribute('data-handler-added', 'true');
+            }
             
             // Show processing section
             document.getElementById('processingSection').classList.remove('hidden');
@@ -533,9 +565,22 @@
         }
 
         function startProcessingTimer() {
+            const uploadProgress = document.getElementById('uploadProgress');
+            const analysisStage = document.getElementById('analysisStage');
+            
+            // Show upload progress initially
+            uploadProgress.classList.remove('hidden');
+            analysisStage.classList.add('hidden');
+            
             processingTimer = setInterval(() => {
                 const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                 document.getElementById('processingTime').textContent = elapsed + 's';
+                
+                // Switch to analysis stage after 30 seconds (indicating upload likely complete)
+                if (elapsed > 30) {
+                    uploadProgress.classList.add('hidden');
+                    analysisStage.classList.remove('hidden');
+                }
             }, 100);
         }
 
@@ -544,6 +589,10 @@
                 clearInterval(processingTimer);
                 processingTimer = null;
             }
+            
+            // Hide progress indicators
+            document.getElementById('uploadProgress').classList.add('hidden');
+            document.getElementById('analysisStage').classList.add('hidden');
         }
 
         function updateProgress(percentage, message, step) {
@@ -714,7 +763,7 @@
                     ctx.font = '12px Arial';
                     ctx.textAlign = 'center';
                     const labelX = startX + regionWidth / 2;
-                    ctx.fillText(`Region ${index + 1}`, labelX, 15);
+                    ctx.fillText(`R.${index + 1}`, labelX, 15);
                     
                     // Draw region type
                     ctx.fillStyle = '#6b7280';
@@ -847,102 +896,132 @@
             stopProcessingTimer();
         }
 
+        let currentActiveRegion = 0;
+        let regionData = [];
+        
         function loadRegionAnalysis(result) {
             const regionCardsSection = document.getElementById('regionCardsSection');
-            const regionCardsGrid = document.getElementById('regionCardsGrid');
+            const regionTabs = document.getElementById('regionTabs');
             
             // Check if region analysis is available
             if (result.analysis?.region_analysis?.regions && result.analysis.region_analysis.regions.length > 0) {
                 regionCardsSection.classList.remove('hidden');
+                regionData = result.analysis.region_analysis.regions;
                 
                 // Clear existing content
-                regionCardsGrid.innerHTML = '';
+                regionTabs.innerHTML = '';
                 
-                // Add region analysis results as cards
-                result.analysis.region_analysis.regions.forEach((region, index) => {
+                // Create tabs for each region
+                regionData.forEach((region, index) => {
                     const regionInfo = region.region_info;
-                    const analysisResults = region.analysis_results;
                     
-                    const regionCard = document.createElement('div');
-                    regionCard.className = 'bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 border border-gray-200';
+                    const tab = document.createElement('button');
+                    tab.className = `px-4 py-2 text-sm font-medium rounded-t-lg transition-all duration-200 ${
+                        index === 0 ? 'bg-white border-b-2 border-blue-500 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`;
+                    tab.textContent = `R.${regionInfo.region_number}`;
+                    tab.onclick = () => showRegionDetails(index);
                     
-                    // Get key and tempo info
-                    const keyInfo = analysisResults.key_detection || {};
-                    const tempoInfo = analysisResults.tempo_detection || {};
-                    const downbeatInfo = analysisResults.downbeat_detection || {};
-                    const danceInfo = analysisResults.danceability || {};
-                    
-                    regionCard.innerHTML = `
-                        <div class="p-6">
-                            <!-- Header -->
-                            <div class="flex items-center justify-between mb-4">
-                                <h4 class="text-lg font-semibold text-gray-900">
-                                    Region ${regionInfo.region_number}
-                                </h4>
-                                <span class="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded">
-                                    ${regionInfo.content_type.toUpperCase()}
-                                </span>
-                            </div>
-                            
-                            <!-- Time Info -->
-                            <div class="mb-4">
-                                <div class="text-sm text-gray-600 mb-1">Timeline</div>
-                                <div class="font-mono text-sm text-gray-900">
-                                    ${formatTime(regionInfo.start_time)} - ${formatTime(regionInfo.end_time)}
-                                </div>
-                                <div class="text-xs text-gray-500">
-                                    ${regionInfo.duration.toFixed(1)}s duration
-                                </div>
-                            </div>
-                            
-                            <!-- Analysis Results -->
-                            <div class="space-y-3">
-                                ${keyInfo.key ? `
-                                    <div class="flex justify-between items-center">
-                                        <span class="text-sm text-gray-600">Key</span>
-                                        <span class="font-semibold text-purple-600">${keyInfo.key}</span>
-                                    </div>
-                                ` : ''}
-                                
-                                ${tempoInfo.tempo ? `
-                                    <div class="flex justify-between items-center">
-                                        <span class="text-sm text-gray-600">Tempo</span>
-                                        <span class="font-semibold text-blue-600">${tempoInfo.tempo.toFixed(0)} BPM</span>
-                                    </div>
-                                ` : ''}
-                                
-                                ${downbeatInfo.downbeat_count !== undefined ? `
-                                    <div class="flex justify-between items-center">
-                                        <span class="text-sm text-gray-600">Downbeats</span>
-                                        <span class="font-semibold text-green-600">${downbeatInfo.downbeat_count}</span>
-                                    </div>
-                                ` : ''}
-                                
-                                ${danceInfo.score !== undefined ? `
-                                    <div class="flex justify-between items-center">
-                                        <span class="text-sm text-gray-600">Danceability</span>
-                                        <span class="font-semibold text-orange-600">${(danceInfo.score * 100).toFixed(0)}%</span>
-                                    </div>
-                                ` : ''}
-                            </div>
-                            
-                            <!-- Action Button -->
-                            <div class="mt-4 pt-4 border-t border-gray-100">
-                                <button class="w-full bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-medium py-2 px-4 rounded-lg transition-colors duration-200">
-                                    ▶️ Focus Region
-                                </button>
-                            </div>
-                        </div>
-                    `;
-                    
-                    regionCardsGrid.appendChild(regionCard);
+                    regionTabs.appendChild(tab);
                 });
                 
-                console.log(`✅ Created ${result.analysis.region_analysis.regions.length} region cards`);
+                // Show first region by default
+                showRegionDetails(0);
+                    
+                console.log(`✅ Created ${result.analysis.region_analysis.regions.length} region tabs`);
             } else {
                 regionCardsSection.classList.add('hidden');
                 console.log('❌ No region analysis data available');
             }
+        }
+        
+        function showRegionDetails(index) {
+            if (index < 0 || index >= regionData.length) return;
+            
+            currentActiveRegion = index;
+            const region = regionData[index];
+            const regionInfo = region.region_info;
+            const analysisResults = region.analysis_results;
+            
+            // Update tab styles
+            const tabs = document.querySelectorAll('#regionTabs button');
+            tabs.forEach((tab, i) => {
+                if (i === index) {
+                    tab.className = 'px-4 py-2 text-sm font-medium rounded-t-lg bg-white border-b-2 border-blue-500 text-blue-600 transition-all duration-200';
+                } else {
+                    tab.className = 'px-4 py-2 text-sm font-medium rounded-t-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-all duration-200';
+                }
+            });
+            
+            // Get analysis info
+            const keyInfo = analysisResults.key_detection || {};
+            const tempoInfo = analysisResults.tempo_detection || {};
+            const downbeatInfo = analysisResults.downbeat_detection || {};
+            const danceInfo = analysisResults.danceability || {};
+            
+            // Update active region card
+            const activeRegionCard = document.getElementById('activeRegionCard');
+            activeRegionCard.innerHTML = `
+                <div class="mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="text-2xl font-semibold text-gray-900">R.${regionInfo.region_number}</h4>
+                        <span class="text-sm text-gray-500 font-mono bg-gray-100 px-3 py-1 rounded">
+                            ${regionInfo.content_type.toUpperCase()}
+                        </span>
+                    </div>
+                    
+                    <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span class="text-gray-600">Start Time:</span>
+                                <span class="font-mono ml-2">${formatTime(regionInfo.start_time)}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-600">End Time:</span>
+                                <span class="font-mono ml-2">${formatTime(regionInfo.end_time)}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-600">Duration:</span>
+                                <span class="font-mono ml-2">${regionInfo.duration.toFixed(1)}s</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    ${keyInfo.key ? `
+                        <div class="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                            <div class="text-sm text-purple-600 mb-1">Key Detection</div>
+                            <div class="text-2xl font-bold text-purple-800">${keyInfo.key}</div>
+                            <div class="text-xs text-purple-600 mt-1">Confidence: ${(keyInfo.confidence * 100).toFixed(0)}%</div>
+                        </div>
+                    ` : ''}
+                    
+                    ${tempoInfo.tempo ? `
+                        <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                            <div class="text-sm text-blue-600 mb-1">Tempo</div>
+                            <div class="text-2xl font-bold text-blue-800">${tempoInfo.tempo.toFixed(0)} <span class="text-sm font-normal">BPM</span></div>
+                            <div class="text-xs text-blue-600 mt-1">Confidence: ${(tempoInfo.confidence * 100).toFixed(0)}%</div>
+                        </div>
+                    ` : ''}
+                    
+                    ${downbeatInfo.downbeat_count !== undefined ? `
+                        <div class="bg-green-50 rounded-lg p-4 border border-green-200">
+                            <div class="text-sm text-green-600 mb-1">Downbeats</div>
+                            <div class="text-2xl font-bold text-green-800">${downbeatInfo.downbeat_count}</div>
+                            <div class="text-xs text-green-600 mt-1">Beat markers detected</div>
+                        </div>
+                    ` : ''}
+                    
+                    ${danceInfo.score !== undefined ? `
+                        <div class="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                            <div class="text-sm text-orange-600 mb-1">Danceability</div>
+                            <div class="text-2xl font-bold text-orange-800">${(danceInfo.score * 100).toFixed(0)}%</div>
+                            <div class="text-xs text-orange-600 mt-1">Dance potential</div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
         }
     </script>
 </body>
