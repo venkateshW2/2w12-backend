@@ -160,22 +160,100 @@ Per Region: Audio → AudioFlux Chroma → Template Matching → Chord Timeline
 Combined: All regions → Regional chord progressions → Global analysis
 ```
 
-## Next Steps
-1. **Per-region analysis implementation** - Individual analysis per detected region
-2. **ML content classification** - Neural network + pre-trained models
-3. **Results structure enhancement** - Region-based response format
-4. **Playback system architecture** - Server streaming + client controls
+## Current Session Progress (July 15, 2025 - Part 2)
 
-## Files Modified
-- `core/content_detector.py` (NEW)
-- `core/enhanced_audio_loader.py` (UPDATED - console output)
-- `main.py` (UPDATED - 750MB limit, filename display)
-- `index.html` (UPDATED - upload progress, filename display, content-aware console)
-- `debug_response.py` (NEW)
-- `test_content_aware.py` (NEW)
+### 6. Simplified Region Detection Implementation
+- **Problem**: Content-aware detection was too aggressive, classifying music as noise/speech
+- **Solution**: Simplified to silence vs sound detection only
+- **Implementation**: 
+  - 25-second minimum silence threshold (short silences ignored)
+  - All non-silence regions marked for analysis
+  - Region markers (Region 1, 2, 3) with waveform visualization
+  - Individual region analysis working (key, tempo, downbeats per region)
+
+### 7. File Duration Limit Fix
+- **Problem**: 36:56 minute file only analyzed up to 9:58 minutes
+- **Root Cause**: `max_duration = 600` seconds (10 minutes) limit
+- **Solution**: Increased to 3600 seconds (60 minutes)
+- **Result**: Full file processing now supported
+
+### 8. Visualization Issues Identified
+- **Canvas Size**: Too small for long files (37 minutes compressed into small window)
+- **Downbeat Rendering**: Creates black bars when many downbeats in small space
+- **Region Markers**: Not rendering properly across full timeline
+- **Scale Problems**: Need zoom/pan functionality for long content
+- **UX Issue**: Unusable for long files without proper zoom controls
+
+## Current Technical Status
+
+### ✅ Working Features
+- **Region Detection**: 25-second silence threshold working correctly
+- **Individual Analysis**: Each region gets separate key/tempo/downbeats/danceability
+- **API Structure**: Content analysis and region analysis properly returned
+- **File Processing**: Full duration support (up to 60 minutes)
+
+### ❌ Current Issues
+- **Canvas Visualization**: 
+  - Small window for long files
+  - Downbeats create black bars
+  - Region markers not displaying properly
+  - No zoom/pan functionality
+- **User Experience**: Unusable for long files without proper scaling
+
+## Test Results
+
+### Simplified Region Detection Test
+```
+📊 REGION ANALYSIS:
+   Regions found: 3
+   Sound regions: 2
+   Sound duration: 10.0s
+   Coverage: 25.1%
+
+📋 REGIONS DETECTED:
+   Region 1: 0.0s - 5.0s | SOUND | 🔊 ANALYZE
+   Region 2: 5.0s - 35.0s | SILENCE | 🔇 SKIP
+   Region 3: 35.0s - 40.0s | SOUND | 🔊 ANALYZE
+
+🔍 INDIVIDUAL REGION ANALYSIS:
+   📊 Region 1: Key: F, Tempo: 120.0 BPM, Downbeats: 2
+   📊 Region 2: Key: F#, Tempo: 120.0 BPM, Danceability: 1.00
+```
+
+### Long File Processing
+- **File**: 36:56 minutes (2.2GB)
+- **Processing**: Full duration now supported
+- **Regions**: Detected throughout entire timeline
+- **Visualization**: Needs redesign for long content
+
+## Next Immediate Priority: Visualization Redesign
+
+### Proposed Solutions for Discussion:
+1. **Zoom/Pan System**: 
+   - Horizontal scrolling for long files
+   - Zoom levels (1x, 2x, 5x, 10x)
+   - Minimap overview with current viewport
+
+2. **Adaptive Rendering**:
+   - Downbeat density filtering (show fewer when zoomed out)
+   - Region-based view modes
+   - Progressive detail levels
+
+3. **UI Redesign**:
+   - Resizable canvas
+   - Timeline controls (play/pause/seek)
+   - Region navigation tabs/buttons
+
+## Files Modified This Session
+- `core/content_detector.py` (UPDATED - 25s silence threshold, simplified classification)
+- `core/enhanced_audio_loader.py` (UPDATED - variable names, duration limit, region analysis)
+- `index.html` (UPDATED - region markers, debug logging)
+- `debug_response_structure.py` (NEW)
+- `test_simple_regions.py` (NEW)
+- `test_region_analysis.py` (NEW)
 
 ## Architecture Status
-- **Current**: content_aware_option_a_optimized
-- **Performance**: 1.12s processing time achieved
-- **Foundation**: Complete for region-based analysis approach
-- **Ready**: For large stem file testing with individual region analysis
+- **Current**: Simplified region detection with individual analysis
+- **Performance**: Working for full-duration files
+- **Foundation**: Ready for visualization redesign
+- **Bottleneck**: Canvas rendering for long files

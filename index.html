@@ -233,6 +233,7 @@
         let waveformData = null;
         let downbeats = [];
         let chords = [];
+        let contentRegions = [];
         let duration = 0;
         let currentTime = 0;
         let startTime = null;
@@ -556,8 +557,20 @@
             waveformData = visualization.waveform;
             downbeats = visualization.downbeats.times || [];
             chords = visualization.chords?.events || [];
+            contentRegions = result.analysis?.content_analysis?.regions || [];
             duration = waveformData.duration;
             currentTime = 0;
+            
+            // Debug logging
+            console.log('📊 DEBUG: Analysis data loaded');
+            console.log('📊 Downbeats:', downbeats.length);
+            console.log('📊 Chords:', chords.length);
+            console.log('📊 Content regions:', contentRegions.length);
+            console.log('📊 Duration:', duration);
+            console.log('📊 Content regions data:', contentRegions);
+            if (chords.length > 0) {
+                console.log('📊 First 5 chords:', chords.slice(0, 5));
+            }
             
             // Update info displays
             updateTimeDisplay();
@@ -633,6 +646,46 @@
             // Clear canvas with white background
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, width, height);
+            
+            // Draw region markers FIRST as background
+            if (contentRegions && contentRegions.length > 0) {
+                console.log(`🎯 Drawing ${contentRegions.length} region markers as background`);
+                
+                contentRegions.forEach((region, index) => {
+                    const startX = (region.start / duration) * width;
+                    const endX = (region.end / duration) * width;
+                    const regionWidth = endX - startX;
+                    
+                    // Different colors for different region types
+                    const regionColor = region.type === 'silence' ? '#f3f4f6' : 
+                                      region.type === 'sound' ? '#dbeafe' : 
+                                      region.type === 'sound_short' ? '#fef3c7' : '#e5e7eb';
+                    
+                    // Draw region background
+                    ctx.fillStyle = regionColor;
+                    ctx.fillRect(startX, 0, regionWidth, height);
+                    
+                    // Draw region border
+                    ctx.strokeStyle = region.analyzed ? '#10b981' : '#6b7280';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(startX, 0);
+                    ctx.lineTo(startX, height);
+                    ctx.stroke();
+                    
+                    // Draw region label
+                    ctx.fillStyle = '#374151';
+                    ctx.font = '12px Arial';
+                    ctx.textAlign = 'center';
+                    const labelX = startX + regionWidth / 2;
+                    ctx.fillText(`Region ${index + 1}`, labelX, 15);
+                    
+                    // Draw region type
+                    ctx.fillStyle = '#6b7280';
+                    ctx.font = '10px Arial';
+                    ctx.fillText(region.type, labelX, 30);
+                });
+            }
             
             const centerY = height / 2;
             const peaks = waveformData.peaks;
@@ -773,6 +826,7 @@
             } else {
                 console.log(`⚠️ No chords to draw: count=${chords.length}, duration=${duration}`);
             }
+            
             
             // Draw current time cursor
             if (currentTime > 0) {

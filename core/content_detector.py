@@ -27,13 +27,13 @@ class ContentDetector:
     ALL subsequent analysis (chords, key, tempo, downbeats) operates only on musical regions.
     """
     
-    def __init__(self, min_duration: float = 3.0):
-        self.min_duration = min_duration  # Minimum region duration (3 seconds)
+    def __init__(self, min_duration: float = 1.0):
+        self.min_duration = min_duration  # Minimum region duration (1 second)
         self.silence_threshold = -40      # dB threshold for silence detection
         self.energy_threshold = 0.005     # Lower RMS energy threshold for music (more inclusive)
         self.spectral_threshold = 0.05    # Lower spectral complexity threshold (more inclusive)
         
-        logger.info(f"🎵 ContentDetector initialized with {min_duration}s minimum duration")
+        logger.info(f"🔊 ContentDetector initialized with {min_duration}s minimum duration (simplified mode)")
     
     def detect_content_regions(self, audio_data: np.ndarray, sr: int) -> List[ContentRegion]:
         """
@@ -55,21 +55,9 @@ class ContentDetector:
             # Step 3: Classify each audio region
             classified_regions = []
             for region in audio_regions:
-                if region['duration'] >= self.min_duration:
-                    content_region = self._classify_audio_region(audio_data, sr, region)
-                    classified_regions.append(content_region)
-                else:
-                    # Too short - mark as noise
-                    classified_regions.append(ContentRegion(
-                        start=region['start'],
-                        end=region['end'], 
-                        duration=region['duration'],
-                        content_type='noise',
-                        energy_level=0.0,
-                        spectral_complexity=0.0,
-                        confidence=1.0,
-                        should_analyze=False
-                    ))
+                # Always classify regions, regardless of duration
+                content_region = self._classify_audio_region(audio_data, sr, region)
+                classified_regions.append(content_region)
             
             # Step 4: Add silence regions for completeness
             for silence in silence_regions:
@@ -88,25 +76,25 @@ class ContentDetector:
             classified_regions.sort(key=lambda x: x.start)
             
             # Log summary
-            musical_regions = [r for r in classified_regions if r.should_analyze]
-            total_musical_duration = sum(r.duration for r in musical_regions)
+            sound_regions = [r for r in classified_regions if r.should_analyze]
+            total_sound_duration = sum(r.duration for r in sound_regions)
             total_duration = len(audio_data) / sr
             
             logger.info(f"✅ Content detection complete:")
             logger.info(f"   📊 Total regions: {len(classified_regions)}")
-            logger.info(f"   🎵 Musical regions: {len(musical_regions)} ({total_musical_duration:.1f}s)")
-            logger.info(f"   ⚡ Analysis efficiency: {total_musical_duration/total_duration*100:.1f}% of file will be analyzed")
+            logger.info(f"   🔊 Sound regions: {len(sound_regions)} ({total_sound_duration:.1f}s)")
+            logger.info(f"   ⚡ Analysis coverage: {total_sound_duration/total_duration*100:.1f}% of file will be analyzed")
             
             return classified_regions
             
         except Exception as e:
             logger.error(f"❌ Content detection failed: {e}")
-            # Fallback: treat entire file as one musical region
+            # Fallback: treat entire file as one sound region
             return [ContentRegion(
                 start=0.0,
                 end=len(audio_data)/sr,
                 duration=len(audio_data)/sr,
-                content_type='music',
+                content_type='sound',
                 energy_level=0.5,
                 spectral_complexity=0.5, 
                 confidence=0.3,
@@ -152,7 +140,7 @@ class ContentDetector:
                 silence_end = times[i]
                 duration = silence_end - silence_start
                 
-                if duration >= 1.0:  # Only count silences >= 1 second
+                if duration >= 25.0:  # Only count silences >= 25 seconds
                     silence_regions.append({
                         'start': silence_start,
                         'end': silence_end,
@@ -165,7 +153,7 @@ class ContentDetector:
         if in_silence:
             silence_end = len(audio_data) / sr
             duration = silence_end - silence_start
-            if duration >= 1.0:
+            if duration >= 25.0:
                 silence_regions.append({
                     'start': silence_start,
                     'end': silence_end,
@@ -221,6 +209,9 @@ class ContentDetector:
         energy_level = self._calculate_energy_level(region_audio)
         spectral_complexity = self._calculate_spectral_complexity(region_audio, sr)
         
+        # Debug logging
+        logger.info(f"🔍 Region {region['start']:.1f}s-{region['end']:.1f}s: energy={energy_level:.6f}, complexity={spectral_complexity:.6f}")
+        
         # Classification logic
         content_type, confidence, should_analyze = self._classify_content_type(
             energy_level, spectral_complexity, region['duration']
@@ -260,46 +251,32 @@ class ContentDetector:
     
     def _classify_content_type(self, energy: float, complexity: float, 
                              duration: float) -> Tuple[str, float, bool]:
-        """Classify content type and determine if it should be analyzed"""
+        """Simple classification - just silence vs sound regions"""
         
-        # Simple classification - focus on musical vs non-musical content
+        # SIMPLIFIED: Only distinguish silence vs sound
+        # All non-silence regions are analyzed regardless of content type
         if energy < self.energy_threshold:
-            return 'ambient', 0.9, False
-        
-        elif complexity > self.spectral_threshold and energy > self.energy_threshold:
-            # High complexity + energy = likely music
-            confidence = min(0.9, complexity + energy)
-            return 'music', confidence, True
-        
-        elif complexity < self.spectral_threshold / 2:
-            # Low complexity = likely speech or noise
-            if duration > 10.0:
-                return 'speech', 0.7, False
-            else:
-                return 'noise', 0.8, False
-        
+            return 'silence', 0.9, False
         else:
-            # Medium complexity - could be music (more inclusive)
-            confidence = (complexity + energy) / 2
-            should_analyze = confidence > 0.2  # Lower threshold for more inclusive analysis
-            return 'music', confidence, should_analyze
+            # Any sound with energy above threshold = analyze it
+            return 'sound', 0.9, True
     
-    def get_musical_regions_only(self, content_regions: List[ContentRegion]) -> List[ContentRegion]:
-        """Filter to only musical regions that should be analyzed"""
+    def get_sound_regions_only(self, content_regions: List[ContentRegion]) -> List[ContentRegion]:
+        """Filter to only sound regions that should be analyzed"""
         return [region for region in content_regions if region.should_analyze]
     
     def calculate_analysis_efficiency(self, content_regions: List[ContentRegion], 
                                     total_duration: float) -> Dict[str, float]:
         """Calculate how much processing time we save with content awareness"""
         
-        musical_regions = self.get_musical_regions_only(content_regions)
-        musical_duration = sum(region.duration for region in musical_regions)
+        sound_regions = self.get_sound_regions_only(content_regions)
+        sound_duration = sum(region.duration for region in sound_regions)
         
         return {
             'total_duration': total_duration,
-            'musical_duration': musical_duration,
-            'efficiency_percentage': (musical_duration / total_duration) * 100,
-            'time_saved_percentage': ((total_duration - musical_duration) / total_duration) * 100,
-            'regions_analyzed': len(musical_regions),
-            'regions_skipped': len(content_regions) - len(musical_regions)
+            'sound_duration': sound_duration,
+            'coverage_percentage': (sound_duration / total_duration) * 100,
+            'silence_percentage': ((total_duration - sound_duration) / total_duration) * 100,
+            'regions_analyzed': len(sound_regions),
+            'regions_skipped': len(content_regions) - len(sound_regions)
         }

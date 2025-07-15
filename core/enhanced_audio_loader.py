@@ -97,7 +97,7 @@ class EnhancedAudioLoader:
     def __init__(self):
         self.db = SoundToolsDatabase()
         self.sample_rate = 22050  # Standard for consistency
-        self.max_duration = 600   # 10 minutes max for now
+        self.max_duration = 3600  # 60 minutes max for longer files
         
         # Use singleton pattern for model persistence
         self.essentia_models = ModelManagerSingleton.get_essentia_models()
@@ -260,69 +260,69 @@ class EnhancedAudioLoader:
             print(f"   Total file duration: {len(y)/sr:.1f}s")
             print(f"   Total regions found: {len(content_regions)}")
             for i, region in enumerate(content_regions):
-                status = "🎵 ANALYZE" if region.should_analyze else "⏭️ SKIP"
+                status = "🔊 ANALYZE" if region.should_analyze else "🔇 SKIP"
                 print(f"   Region {i+1}: {region.start:.1f}s-{region.end:.1f}s | {region.content_type.upper()} | {status}")
             
-            musical_regions = [r for r in content_regions if r.should_analyze]
-            total_musical_duration = sum(r.duration for r in musical_regions)
-            efficiency = (total_musical_duration / (len(y)/sr)) * 100
+            sound_regions_temp = [r for r in content_regions if r.should_analyze]
+            total_sound_duration_temp = sum(r.duration for r in sound_regions_temp)
+            coverage = (total_sound_duration_temp / (len(y)/sr)) * 100
             
-            print(f"\n⚡ CONTENT-AWARE EFFICIENCY:")
-            print(f"   🎵 Musical regions: {len(musical_regions)} ({total_musical_duration:.1f}s)")
-            print(f"   ⏭️ Skipped regions: {len(content_regions) - len(musical_regions)}")
-            print(f"   🚀 Analysis efficiency: {efficiency:.1f}% of file")
-            print(f"   💾 Time saved: {100-efficiency:.1f}%")
+            print(f"\n🔊 SOUND REGION COVERAGE:")
+            print(f"   🔊 Sound regions: {len(sound_regions_temp)} ({total_sound_duration_temp:.1f}s)")
+            print(f"   🔇 Silence regions: {len(content_regions) - len(sound_regions_temp)}")
+            print(f"   📊 Coverage: {coverage:.1f}% of file")
+            print(f"   🔇 Silence: {100-coverage:.1f}%")
             print("="*60)
             
-            # Get efficiency metrics
-            efficiency_stats = content_detector.calculate_analysis_efficiency(
+            # Get coverage metrics
+            coverage_stats = content_detector.calculate_analysis_efficiency(
                 content_regions, len(y)/sr
             )
-            logger.info(f"⚡ Content awareness efficiency: {efficiency_stats['efficiency_percentage']:.1f}% of file will be analyzed")
-            logger.info(f"💾 Processing time saved: {efficiency_stats['time_saved_percentage']:.1f}%")
+            logger.info(f"🔊 Sound coverage: {coverage_stats['coverage_percentage']:.1f}% of file will be analyzed")
+            logger.info(f"🔇 Silence detected: {coverage_stats['silence_percentage']:.1f}%")
             
-            # Get only musical regions for analysis
-            musical_regions = content_detector.get_musical_regions_only(content_regions)
-            logger.info(f"🎵 Musical regions to analyze: {len(musical_regions)}")
+            # Get only sound regions for analysis (simplified - no content awareness)
+            sound_regions = content_detector.get_sound_regions_only(content_regions)
+            logger.info(f"🔊 Sound regions to analyze: {len(sound_regions)}")
             
-            if not musical_regions:
-                logger.warning("⚠️ No musical content detected - using fallback full-file analysis")
-                # Fallback: treat entire file as musical
-                musical_regions = [ContentRegion(
+            if not sound_regions:
+                logger.warning("⚠️ No sound content detected - using fallback full-file analysis")
+                # Fallback: treat entire file as sound
+                sound_regions = [ContentRegion(
                     start=0.0, end=len(y)/sr, duration=len(y)/sr,
-                    content_type='music', energy_level=0.5, spectral_complexity=0.5,
+                    content_type='sound', energy_level=0.5, spectral_complexity=0.5,
                     confidence=0.3, should_analyze=True
                 )]
             
-            # STEP 2: CONTENT-AWARE ANALYSIS - Extract musical audio for processing
-            logger.info("🎯 PHASE 2: Extracting musical content for targeted analysis...")
-            musical_audio_segments = []
-            total_musical_duration = 0
+            # STEP 2: SIMPLIFIED REGION ANALYSIS - Extract sound regions for processing
+            logger.info("🎯 PHASE 2: Extracting sound regions for analysis...")
+            sound_audio_segments = []
+            total_sound_duration = 0
             
-            print(f"\n🎵 EXTRACTING MUSICAL SEGMENTS:")
-            for region in musical_regions:
+            print(f"\n🔊 EXTRACTING SOUND REGIONS:")
+            for i, region in enumerate(sound_regions):
                 start_sample = int(region.start * sr)
                 end_sample = int(region.end * sr)
-                musical_segment = y[start_sample:end_sample]
-                musical_audio_segments.append(musical_segment)
-                total_musical_duration += region.duration
-                print(f"   ✅ Segment: {region.start:.1f}s - {region.end:.1f}s ({region.duration:.1f}s) | {region.content_type}")
-                logger.info(f"🎵 Musical segment: {region.start:.1f}s - {region.end:.1f}s ({region.duration:.1f}s)")
+                sound_segment = y[start_sample:end_sample]
+                sound_audio_segments.append(sound_segment)
+                total_sound_duration += region.duration
+                print(f"   ✅ Region {i+1}: {region.start:.1f}s - {region.end:.1f}s ({region.duration:.1f}s) | {region.content_type}")
+                logger.info(f"🔊 Sound region {i+1}: {region.start:.1f}s - {region.end:.1f}s ({region.duration:.1f}s)")
             
             # INDIVIDUAL REGION ANALYSIS (No concatenation - analyze each region separately)
-            if len(musical_audio_segments) == 0:
-                print(f"   ⚠️ NO MUSICAL CONTENT DETECTED - Skipping analysis")
-                logger.warning("⚠️ No musical content detected - analysis skipped")
-                return {"error": "No musical content detected"}
+            if len(sound_audio_segments) == 0:
+                print(f"   ⚠️ NO SOUND CONTENT DETECTED - Skipping analysis")
+                logger.warning("⚠️ No sound content detected - analysis skipped")
+                return {"error": "No sound content detected"}
             
             print(f"\n🔍 PREPARING INDIVIDUAL REGION ANALYSIS:")
-            print(f"   📊 Total musical regions: {len(musical_audio_segments)}")
+            print(f"   📊 Total sound regions: {len(sound_audio_segments)}")
             print(f"   ⚡ Each region will be analyzed separately")
-            print(f"   🎵 Total musical content: {total_musical_duration:.1f}s")
+            print(f"   🔊 Total sound content: {total_sound_duration:.1f}s")
             
             # Store region data for individual analysis
             region_analysis_data = []
-            for i, (region, audio_segment) in enumerate(zip(musical_regions, musical_audio_segments)):
+            for i, (region, audio_segment) in enumerate(zip(sound_regions, sound_audio_segments)):
                 region_data = {
                     'region_index': i,
                     'region': region,
@@ -337,23 +337,23 @@ class EnhancedAudioLoader:
             
             # For now, still create concatenated audio for backward compatibility
             # TODO: Remove this once full per-region analysis is implemented
-            if len(musical_audio_segments) > 1:
-                musical_audio = np.concatenate(musical_audio_segments)
-                logger.info(f"🔗 Concatenated {len(musical_audio_segments)} segments for backward compatibility")
+            if len(sound_audio_segments) > 1:
+                sound_audio = np.concatenate(sound_audio_segments)
+                logger.info(f"🔗 Concatenated {len(sound_audio_segments)} segments for backward compatibility")
             else:
-                musical_audio = musical_audio_segments[0]
+                sound_audio = sound_audio_segments[0]
             
-            # Check if we need chunking for large files (based on musical content only)
-            should_chunk = self._should_use_chunking(musical_audio, sr, file_info)
+            # Check if we need chunking for large files (based on sound content only)
+            should_chunk = self._should_use_chunking(sound_audio, sr, file_info)
             
             if should_chunk:
-                print(f"   🔧 Large musical content - will use GPU-optimized chunking")
-                logger.info(f"🔧 Large musical content detected - using GPU-optimized chunking")
+                print(f"   🔧 Large sound content - will use GPU-optimized chunking")
+                logger.info(f"🔧 Large sound content detected - using GPU-optimized chunking")
                 # TODO: Implement content-aware chunking
                 logger.warning("⚠️ Content-aware chunking not yet implemented - using standard analysis")
             
-            print(f"\n🚀 ANALYZING {total_musical_duration:.1f}s MUSICAL CONTENT (saved {(len(y)/sr - total_musical_duration):.1f}s)")
-            logger.info(f"🎵 Content-aware analysis for {total_musical_duration:.1f}s musical content (vs {len(y)/sr:.1f}s total)")
+            print(f"\n🚀 ANALYZING {total_sound_duration:.1f}s SOUND CONTENT (saved {(len(y)/sr - total_sound_duration):.1f}s)")
+            logger.info(f"🔊 Simplified region analysis for {total_sound_duration:.1f}s sound content (vs {len(y)/sr:.1f}s total)")
             
             # INDIVIDUAL REGION ANALYSIS - New architecture
             print(f"\n🔍 STARTING INDIVIDUAL REGION ANALYSIS:")
@@ -366,8 +366,8 @@ class EnhancedAudioLoader:
                 region_results.append(region_result)
                 print(f"   ✅ Region {i+1} analysis complete")
             
-            # PARALLEL ANALYSIS PIPELINE - Run all analyses on MUSICAL CONTENT ONLY (for backward compatibility)
-            logger.info("🚀 Starting content-aware parallel analysis pipeline...")
+            # PARALLEL ANALYSIS PIPELINE - Run all analyses on SOUND CONTENT ONLY (for backward compatibility)
+            logger.info("🚀 Starting simplified parallel analysis pipeline...")
             
             # TODO: Replace this with region-based analysis only
             
@@ -375,20 +375,20 @@ class EnhancedAudioLoader:
             import concurrent.futures
             
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                # CONTENT-AWARE OPTION A ARCHITECTURE: All analysis on musical regions only
+                # SIMPLIFIED ARCHITECTURE: All analysis on sound regions only
                 
-                logger.info("🚀 Submitting Essentia ML analysis task (musical content only)...")
-                future_ml = executor.submit(self._essentia_ml_analysis, musical_audio, sr)
+                logger.info("🚀 Submitting Essentia ML analysis task (sound content only)...")
+                future_ml = executor.submit(self._essentia_ml_analysis, sound_audio, sr)
                 
-                logger.info(f"🚀 Submitting content-aware Madmom analysis...")
-                # For Madmom, we still need file-based approach but will filter results to musical regions
+                logger.info(f"🚀 Submitting simplified Madmom analysis...")
+                # For Madmom, we still need file-based approach but will filter results to sound regions
                 future_rhythm = executor.submit(self._madmom_content_aware_analysis, tmp_file_path, content_regions)
                 
-                logger.info("⚡ Submitting AudioFlux analysis (musical content only)...")
-                future_audioflux = executor.submit(self._audioflux_fast_features, musical_audio, sr)
+                logger.info("⚡ Submitting AudioFlux analysis (sound content only)...")
+                future_audioflux = executor.submit(self._audioflux_fast_features, sound_audio, sr)
                 
-                logger.info("⚡ Submitting minimal librosa analysis (musical content only)...")
-                future_librosa = executor.submit(self._librosa_minimal_analysis, musical_audio, sr)
+                logger.info("⚡ Submitting minimal librosa analysis (sound content only)...")
+                future_librosa = executor.submit(self._librosa_minimal_analysis, sound_audio, sr)
                 
                 # Wait for all analyses to complete - optimized order
                 logger.info("⏳ Waiting for Essentia ML analysis (key/tempo/danceability)...")
@@ -415,7 +415,7 @@ class EnhancedAudioLoader:
                 "filename": filename,
                 "file_info": file_info,
                 
-                # CONTENT-AWARE ANALYSIS RESULTS
+                # SIMPLIFIED REGION ANALYSIS RESULTS
                 "content_analysis": {
                     "regions": [
                         {
@@ -429,10 +429,10 @@ class EnhancedAudioLoader:
                             "analyzed": region.should_analyze
                         } for region in content_regions
                     ],
-                    "efficiency_stats": efficiency_stats,
-                    "musical_regions_count": len(musical_regions),
-                    "total_musical_duration": total_musical_duration,
-                    "content_aware_processing": True
+                    "coverage_stats": coverage_stats,
+                    "sound_regions_count": len(sound_regions),
+                    "total_sound_duration": total_sound_duration,
+                    "region_processing": True
                 },
                 
                 # ML Models (Primary Analysis - musical content only)
@@ -473,8 +473,28 @@ class EnhancedAudioLoader:
                 "enabled": True,
                 "total_regions": len(region_results),
                 "regions": region_results,
-                "total_musical_duration": total_musical_duration,
+                "total_sound_duration": total_sound_duration,
                 "architecture": "individual_region_analysis"
+            }
+            
+            # Also add ALL content regions (including non-musical) for visualization
+            comprehensive_result["content_regions"] = {
+                "all_regions": [
+                    {
+                        "region_number": i+1,
+                        "start_time": region.start,
+                        "end_time": region.end,
+                        "duration": region.duration,
+                        "content_type": region.content_type,
+                        "confidence": region.confidence,
+                        "energy_level": region.energy_level,
+                        "should_analyze": region.should_analyze,
+                        "analyzed": region.should_analyze  # Whether this region was actually analyzed
+                    }
+                    for i, region in enumerate(content_regions)
+                ],
+                "total_regions": len(content_regions),
+                "coverage_stats": coverage_stats
             }
             
             return comprehensive_result
@@ -671,12 +691,12 @@ class EnhancedAudioLoader:
         
         # Filter downbeats to musical regions only
         all_downbeats = full_result["madmom_downbeat_times"]
-        musical_regions = [r for r in content_regions if r.should_analyze]
+        sound_regions = [r for r in content_regions if r.should_analyze]
         
         filtered_downbeats = []
         for downbeat_time in all_downbeats:
-            # Check if this downbeat falls within any musical region
-            for region in musical_regions:
+            # Check if this downbeat falls within any sound region
+            for region in sound_regions:
                 if region.start <= downbeat_time <= region.end:
                     filtered_downbeats.append(downbeat_time)
                     break
@@ -691,7 +711,7 @@ class EnhancedAudioLoader:
             "content_aware_filtering": {
                 "original_downbeats": len(all_downbeats),
                 "filtered_downbeats": len(filtered_downbeats),
-                "musical_regions_used": len(musical_regions),
+                "sound_regions_used": len(sound_regions),
                 "filtering_efficiency": f"{(1 - len(filtered_downbeats)/len(all_downbeats))*100:.1f}% filtered out"
             }
         }
@@ -1256,9 +1276,9 @@ class EnhancedAudioLoader:
             }
             
             # Run analysis based on content type
-            if content_type in ['music', 'instruments']:
-                # Full musical analysis for musical content
-                print(f"         🎵 Full musical analysis for {content_type}")
+            if content_type in ['sound', 'music', 'instruments', 'sound_short']:
+                # Full analysis for any sound content
+                print(f"         🔊 Full analysis for {content_type}")
                 
                 # Key detection
                 ml_analysis = self._essentia_ml_analysis(audio_segment, sr)
