@@ -9,6 +9,7 @@ import os
 from typing import Dict, Any, Tuple, List, Optional
 from core.database_manager import SoundToolsDatabase
 from core.chord_processor import ChordProcessor, ChordTimeline
+from core.content_detector import ContentDetector, ContentRegion
 
 logger = logging.getLogger(__name__)
 
@@ -228,8 +229,9 @@ class EnhancedAudioLoader:
     
     def _perform_comprehensive_analysis(self, file_content: bytes, filename: str) -> Dict[str, Any]:
         """
-        Comprehensive analysis: Enhanced librosa + Essentia ML + Madmom rhythm
-
+        CONTENT-AWARE Comprehensive analysis: Content detection → targeted analysis only on musical regions
+        
+        NEW ARCHITECTURE: All analysis (key, tempo, downbeats, chords) operates only on detected musical content
         """
         
         # Create temporary file for librosa - ensure it's accessible after closing
@@ -245,38 +247,116 @@ class EnhancedAudioLoader:
             y, sr, file_info = self._smart_audio_loading(tmp_file_path)
             logger.info(f"✅ Audio loaded successfully: {file_info.get('analyzed_duration', 0):.1f}s")
             
-            # Check if we need chunking for large files (GPU optimization)
-            should_chunk = self._should_use_chunking(y, sr, file_info)
+            # STEP 1: CONTENT-AWARE DETECTION (Foundation for all analysis)
+            print("\n" + "="*60)
+            print("🎯 CONTENT-AWARE ANALYSIS STARTING")
+            print("="*60)
+            logger.info("🎯 PHASE 1: Content-aware region detection...")
+            content_detector = ContentDetector(min_duration=3.0)
+            content_regions = content_detector.detect_content_regions(y, sr)
+            
+            # CONSOLE DISPLAY: Show content regions detected
+            print(f"\n📊 CONTENT REGIONS DETECTED:")
+            print(f"   Total file duration: {len(y)/sr:.1f}s")
+            print(f"   Total regions found: {len(content_regions)}")
+            for i, region in enumerate(content_regions):
+                status = "🎵 ANALYZE" if region.should_analyze else "⏭️ SKIP"
+                print(f"   Region {i+1}: {region.start:.1f}s-{region.end:.1f}s | {region.content_type.upper()} | {status}")
+            
+            musical_regions = [r for r in content_regions if r.should_analyze]
+            total_musical_duration = sum(r.duration for r in musical_regions)
+            efficiency = (total_musical_duration / (len(y)/sr)) * 100
+            
+            print(f"\n⚡ CONTENT-AWARE EFFICIENCY:")
+            print(f"   🎵 Musical regions: {len(musical_regions)} ({total_musical_duration:.1f}s)")
+            print(f"   ⏭️ Skipped regions: {len(content_regions) - len(musical_regions)}")
+            print(f"   🚀 Analysis efficiency: {efficiency:.1f}% of file")
+            print(f"   💾 Time saved: {100-efficiency:.1f}%")
+            print("="*60)
+            
+            # Get efficiency metrics
+            efficiency_stats = content_detector.calculate_analysis_efficiency(
+                content_regions, len(y)/sr
+            )
+            logger.info(f"⚡ Content awareness efficiency: {efficiency_stats['efficiency_percentage']:.1f}% of file will be analyzed")
+            logger.info(f"💾 Processing time saved: {efficiency_stats['time_saved_percentage']:.1f}%")
+            
+            # Get only musical regions for analysis
+            musical_regions = content_detector.get_musical_regions_only(content_regions)
+            logger.info(f"🎵 Musical regions to analyze: {len(musical_regions)}")
+            
+            if not musical_regions:
+                logger.warning("⚠️ No musical content detected - using fallback full-file analysis")
+                # Fallback: treat entire file as musical
+                musical_regions = [ContentRegion(
+                    start=0.0, end=len(y)/sr, duration=len(y)/sr,
+                    content_type='music', energy_level=0.5, spectral_complexity=0.5,
+                    confidence=0.3, should_analyze=True
+                )]
+            
+            # STEP 2: CONTENT-AWARE ANALYSIS - Extract musical audio for processing
+            logger.info("🎯 PHASE 2: Extracting musical content for targeted analysis...")
+            musical_audio_segments = []
+            total_musical_duration = 0
+            
+            print(f"\n🎵 EXTRACTING MUSICAL SEGMENTS:")
+            for region in musical_regions:
+                start_sample = int(region.start * sr)
+                end_sample = int(region.end * sr)
+                musical_segment = y[start_sample:end_sample]
+                musical_audio_segments.append(musical_segment)
+                total_musical_duration += region.duration
+                print(f"   ✅ Segment: {region.start:.1f}s - {region.end:.1f}s ({region.duration:.1f}s) | {region.content_type}")
+                logger.info(f"🎵 Musical segment: {region.start:.1f}s - {region.end:.1f}s ({region.duration:.1f}s)")
+            
+            # Concatenate all musical segments for analysis
+            if len(musical_audio_segments) > 1:
+                musical_audio = np.concatenate(musical_audio_segments)
+                print(f"   🔗 Concatenated {len(musical_audio_segments)} segments → {total_musical_duration:.1f}s total musical content")
+                logger.info(f"🔗 Concatenated {len(musical_audio_segments)} musical segments → {total_musical_duration:.1f}s total")
+            elif len(musical_audio_segments) == 1:
+                musical_audio = musical_audio_segments[0]
+                print(f"   🎵 Single musical segment: {total_musical_duration:.1f}s")
+                logger.info(f"🎵 Single musical segment: {total_musical_duration:.1f}s")
+            else:
+                print(f"   ⚠️ NO MUSICAL CONTENT DETECTED - Skipping analysis")
+                logger.warning("⚠️ No musical content detected - analysis skipped")
+                return {"error": "No musical content detected"}
+            
+            # Check if we need chunking for large files (based on musical content only)
+            should_chunk = self._should_use_chunking(musical_audio, sr, file_info)
             
             if should_chunk:
-                logger.info(f"🔧 Large file detected - using GPU-optimized chunking")
-                return self._chunked_parallel_analysis(y, sr, tmp_file_path, file_info, filename)
-            else:
-                logger.info(f"🎵 Standard parallel analysis for {file_info.get('analyzed_duration', 0):.1f}s file")
+                print(f"   🔧 Large musical content - will use GPU-optimized chunking")
+                logger.info(f"🔧 Large musical content detected - using GPU-optimized chunking")
+                # TODO: Implement content-aware chunking
+                logger.warning("⚠️ Content-aware chunking not yet implemented - using standard analysis")
             
-            # PARALLEL ANALYSIS PIPELINE - Run all analyses simultaneously
-            logger.info("🚀 Starting parallel analysis pipeline...")
+            print(f"\n🚀 ANALYZING {total_musical_duration:.1f}s MUSICAL CONTENT (saved {(len(y)/sr - total_musical_duration):.1f}s)")
+            logger.info(f"🎵 Content-aware analysis for {total_musical_duration:.1f}s musical content (vs {len(y)/sr:.1f}s total)")
+            
+            # PARALLEL ANALYSIS PIPELINE - Run all analyses on MUSICAL CONTENT ONLY
+            logger.info("🚀 Starting content-aware parallel analysis pipeline...")
             parallel_start = time.time()
             
             # Use ThreadPoolExecutor for parallel execution (no asyncio conflicts)
             import concurrent.futures
             
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                # OPTION A ARCHITECTURE: ML Models + AudioFlux for specific features
-                # Submit all tasks to thread pool for parallel execution
+                # CONTENT-AWARE OPTION A ARCHITECTURE: All analysis on musical regions only
                 
-                logger.info("🚀 Submitting Essentia ML analysis task (primary)...")
-                future_ml = executor.submit(self._essentia_ml_analysis, y, sr)
+                logger.info("🚀 Submitting Essentia ML analysis task (musical content only)...")
+                future_ml = executor.submit(self._essentia_ml_analysis, musical_audio, sr)
                 
-                logger.info(f"🚀 Submitting Madmom downbeat analysis task for file: {tmp_file_path}")
-                future_rhythm = executor.submit(self._madmom_fast_rhythm_analysis, tmp_file_path)
+                logger.info(f"🚀 Submitting content-aware Madmom analysis...")
+                # For Madmom, we still need file-based approach but will filter results to musical regions
+                future_rhythm = executor.submit(self._madmom_content_aware_analysis, tmp_file_path, content_regions)
                 
-                logger.info("⚡ Submitting AudioFlux fast feature extraction (transients/mel)...")
-                future_audioflux = executor.submit(self._audioflux_fast_features, y, sr)
+                logger.info("⚡ Submitting AudioFlux analysis (musical content only)...")
+                future_audioflux = executor.submit(self._audioflux_fast_features, musical_audio, sr)
                 
-                # SIMPLIFIED: Only RMS energy from librosa (essential for energy analysis)
-                logger.info("⚡ Librosa MINIMIZED - only essential RMS energy calculation")
-                future_librosa = executor.submit(self._librosa_minimal_analysis, y, sr)
+                logger.info("⚡ Submitting minimal librosa analysis (musical content only)...")
+                future_librosa = executor.submit(self._librosa_minimal_analysis, musical_audio, sr)
                 
                 # Wait for all analyses to complete - optimized order
                 logger.info("⏳ Waiting for Essentia ML analysis (key/tempo/danceability)...")
@@ -298,27 +378,47 @@ class EnhancedAudioLoader:
             parallel_time = time.time() - parallel_start
             logger.info(f"⚡ Parallel analysis completed in {parallel_time:.2f}s")
 
-            # Combine all results - OPTION A ARCHITECTURE
+            # Combine all results - CONTENT-AWARE OPTION A ARCHITECTURE
             comprehensive_result = {
                 "filename": filename,
                 "file_info": file_info,
                 
-                # ML Models (Primary Analysis)
+                # CONTENT-AWARE ANALYSIS RESULTS
+                "content_analysis": {
+                    "regions": [
+                        {
+                            "start": region.start,
+                            "end": region.end,
+                            "duration": region.duration,
+                            "type": region.content_type,
+                            "energy": region.energy_level,
+                            "complexity": region.spectral_complexity,
+                            "confidence": region.confidence,
+                            "analyzed": region.should_analyze
+                        } for region in content_regions
+                    ],
+                    "efficiency_stats": efficiency_stats,
+                    "musical_regions_count": len(musical_regions),
+                    "total_musical_duration": total_musical_duration,
+                    "content_aware_processing": True
+                },
+                
+                # ML Models (Primary Analysis - musical content only)
                 **ml_analysis,
                 
-                # Madmom rhythm analysis (downbeats/meter)
+                # Madmom rhythm analysis (content-aware filtered)
                 **rhythm_analysis,
                 
-                # AudioFlux fast features (transients/mel coefficients)
+                # AudioFlux fast features (musical content only)
                 **audioflux_analysis,
                 
-                # Minimal librosa (RMS energy only)
+                # Minimal librosa (musical content only)
                 **librosa_analysis,
 
                 # Analysis metadata  
                 "features_extracted": list({**ml_analysis, **audioflux_analysis, **rhythm_analysis}.keys()),
-                "analysis_pipeline": ["essentia_ml_primary", "madmom_downbeats_numpy", "audioflux_fast", "librosa_minimal"],
-                "architecture": "option_a_optimized_no_librosa", 
+                "analysis_pipeline": ["content_detection", "essentia_ml_musical", "madmom_content_aware", "audioflux_musical", "librosa_minimal"],
+                "architecture": "content_aware_option_a_optimized", 
                 "quality_score": self._calculate_analysis_quality({
                 **ml_analysis, **rhythm_analysis, **audioflux_analysis, **librosa_analysis
                 }),
@@ -507,6 +607,56 @@ class EnhancedAudioLoader:
         else:
             logger.warning("⚠️ Madmom processor not available - using fallback")
             return {"madmom_status": "unavailable"}
+    
+    def _madmom_content_aware_analysis(self, audio_file_path: str, content_regions: List[ContentRegion]) -> Dict[str, Any]:
+        """
+        Content-aware Madmom analysis - filters results to musical regions only
+        
+        Uses file-based Madmom analysis but filters downbeats/meter to musical content only
+        """
+        madmom_processor = ModelManagerSingleton.get_madmom_processor()
+        if not madmom_processor:
+            logger.warning("⚠️ Madmom processor not available - using fallback")
+            return {"madmom_status": "unavailable"}
+        
+        logger.info(f"🎯 Starting content-aware Madmom analysis...")
+        
+        # Get full-file analysis first
+        full_result = madmom_processor.analyze_downbeats_timeline(audio_file_path)
+        
+        if "madmom_downbeat_times" not in full_result:
+            logger.warning("⚠️ No downbeats detected in full analysis")
+            return full_result
+        
+        # Filter downbeats to musical regions only
+        all_downbeats = full_result["madmom_downbeat_times"]
+        musical_regions = [r for r in content_regions if r.should_analyze]
+        
+        filtered_downbeats = []
+        for downbeat_time in all_downbeats:
+            # Check if this downbeat falls within any musical region
+            for region in musical_regions:
+                if region.start <= downbeat_time <= region.end:
+                    filtered_downbeats.append(downbeat_time)
+                    break
+        
+        logger.info(f"🎵 Content-aware filtering: {len(all_downbeats)} → {len(filtered_downbeats)} downbeats")
+        
+        # Update result with filtered data
+        content_aware_result = {
+            **full_result,
+            "madmom_downbeat_times": filtered_downbeats,
+            "madmom_downbeat_count": len(filtered_downbeats),
+            "content_aware_filtering": {
+                "original_downbeats": len(all_downbeats),
+                "filtered_downbeats": len(filtered_downbeats),
+                "musical_regions_used": len(musical_regions),
+                "filtering_efficiency": f"{(1 - len(filtered_downbeats)/len(all_downbeats))*100:.1f}% filtered out"
+            }
+        }
+        
+        logger.info(f"✅ Content-aware Madmom analysis completed")
+        return content_aware_result
 
     # REMOVED: _rhythmic_feature_analysis - handled by AudioFlux
     

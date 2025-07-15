@@ -179,11 +179,11 @@ async def analyze_audio_enhanced(file: UploadFile = File(...)):
         file_content = await file.read()
         file_size_mb = len(file_content) / 1024 / 1024
         
-        # File size validation (150MB limit)
-        if file_size_mb > 150:
+        # File size validation (750MB limit for content-aware testing)
+        if file_size_mb > 750:
             raise HTTPException(
                 status_code=413,
-                detail=f"File too large: {file_size_mb:.1f}MB. Maximum size: 150MB"
+                detail=f"File too large: {file_size_mb:.1f}MB. Maximum size: 750MB"
             )
         
         logger.info(f"🎵 Processing {file.filename} ({file_size_mb:.1f}MB)")
@@ -429,11 +429,11 @@ async def analyze_audio_with_visualization(file: UploadFile = File(...)):
         file_content = await file.read()
         file_size_mb = len(file_content) / 1024 / 1024
         
-        # File size validation (150MB limit)
-        if file_size_mb > 150:
+        # File size validation (750MB limit for content-aware testing)
+        if file_size_mb > 750:
             raise HTTPException(
                 status_code=413,
-                detail=f"File too large: {file_size_mb:.1f}MB. Maximum size: 150MB"
+                detail=f"File too large: {file_size_mb:.1f}MB. Maximum size: 750MB"
             )
         
         logger.info(f"🎨 NB Visualization analysis: {file.filename} ({file_size_mb:.1f}MB)")
@@ -502,11 +502,19 @@ async def analyze_audio_with_visualization(file: UploadFile = File(...)):
                     "chord_progression": chord_analysis.get('chord_status') == 'success',
                     "canvas_ready": True,
                     "lightweight_rendering": True,
-                    "sub_beat_resolution": True
+                    "sub_beat_resolution": True,
+                    "content_aware_analysis": True
                 },
                 "performance": {
                     "chord_analysis_time": chord_analysis.get('chord_analysis_time', 0),
                     "chord_detection_method": "audioflux_template_matching"
+                },
+                "content_aware": {
+                    "enabled": True,
+                    "regions": result.get('content_analysis', {}).get('regions', []),
+                    "musical_regions": result.get('content_analysis', {}).get('musical_regions_count', 0),
+                    "efficiency": result.get('content_analysis', {}).get('efficiency_stats', {}),
+                    "time_saved_percentage": result.get('content_analysis', {}).get('efficiency_stats', {}).get('time_saved_percentage', 0)
                 }
             }
             

@@ -359,6 +359,19 @@
             // Update file info
             document.getElementById('tech-filesize').textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB`;
             
+            // Show filename in header
+            const filenameDisplay = document.getElementById('filename-display');
+            if (filenameDisplay) {
+                filenameDisplay.textContent = file.name;
+                filenameDisplay.classList.remove('hidden');
+            } else {
+                // Add filename display to header if it doesn't exist
+                const header = document.querySelector('h2');
+                if (header) {
+                    header.innerHTML = `Analysis Complete - <span class="text-blue-600 font-mono text-lg">${file.name}</span>`;
+                }
+            }
+            
             try {
                 // Create form data
                 const formData = new FormData();
@@ -367,11 +380,20 @@
                 // Update progress
                 updateProgress(10, 'Uploading file...', 'upload');
                 
-                // Make API request
+                // Make API request with upload progress tracking
                 const response = await fetch('/api/audio/analyze-visualization', {
                     method: 'POST',
                     body: formData
                 });
+                
+                // Track upload progress (basic - we'll enhance this)
+                const uploadSize = file.size;
+                let uploadedBytes = 0;
+                
+                // Show upload progress for large files
+                if (uploadSize > 50 * 1024 * 1024) { // 50MB+
+                    updateProgress(25, `Uploading ${(uploadSize/1024/1024).toFixed(0)}MB file...`, 'upload');
+                }
                 
                 updateProgress(40, 'AudioFlux processing...', 'analysis');
                 
@@ -392,6 +414,29 @@
                 console.log('🔍 Downbeats:', result.visualization?.downbeats?.times?.slice(0, 5));
                 console.log('🔍 Chords detected:', result.visualization?.chords?.events?.length || 0);
                 console.log('🔍 Chord events:', result.visualization?.chords?.events);
+                
+                // CONTENT-AWARE ANALYSIS DEBUG
+                if (result.content_aware) {
+                    console.log('\n🎯 CONTENT-AWARE ANALYSIS RESULTS:');
+                    console.log('   📊 Content awareness enabled:', result.content_aware.enabled);
+                    console.log('   🎵 Musical regions detected:', result.content_aware.musical_regions);
+                    console.log('   ⚡ Time saved:', result.content_aware.time_saved_percentage + '%');
+                    console.log('   📋 Content regions:', result.content_aware.regions);
+                    
+                    if (result.content_aware.regions && result.content_aware.regions.length > 0) {
+                        console.log('   📊 Region breakdown:');
+                        result.content_aware.regions.forEach((region, i) => {
+                            const status = region.analyzed ? '🎵 ANALYZED' : '⏭️ SKIPPED';
+                            console.log(`      Region ${i+1}: ${region.start.toFixed(1)}s-${region.end.toFixed(1)}s | ${region.type.toUpperCase()} | ${status}`);
+                        });
+                    }
+                }
+                
+                if (result.analysis?.content_analysis) {
+                    console.log('\n🎯 DETAILED CONTENT ANALYSIS:');
+                    console.log('   📊 Musical duration:', result.analysis.content_analysis.total_musical_duration + 's');
+                    console.log('   ⚡ Efficiency:', result.analysis.content_analysis.efficiency_stats);
+                }
                 
                 // Stop timer
                 stopProcessingTimer();
@@ -597,12 +642,36 @@
             ctx.lineTo(width, centerY);
             ctx.stroke();
             
-            // DAW-STYLE TIMELINE: Thin black downbeat lines
+            // DAW-STYLE TIMELINE: Beat grid with downbeats and sub-beats
             if (downbeats.length > 0 && duration > 0) {
                 console.log(`🥁 Drawing ${downbeats.length} downbeats as timeline`);
                 
-                ctx.strokeStyle = '#333333';
+                // Calculate approximate BPM from downbeats
+                const avgInterval = downbeats.length > 1 ? 
+                    (downbeats[downbeats.length-1] - downbeats[0]) / (downbeats.length - 1) : 2.5;
+                const beatInterval = avgInterval / 4; // 4 beats per downbeat
+                
+                // Draw sub-beats (lighter lines)
+                ctx.strokeStyle = '#dddddd';
                 ctx.lineWidth = 1;
+                for (let i = 0; i < downbeats.length - 1; i++) {
+                    const startTime = downbeats[i];
+                    const endTime = downbeats[i + 1];
+                    
+                    // Draw 3 sub-beats between each downbeat
+                    for (let beat = 1; beat <= 3; beat++) {
+                        const beatTime = startTime + (beat * (endTime - startTime) / 4);
+                        const x = (beatTime / duration) * width;
+                        ctx.beginPath();
+                        ctx.moveTo(x, height * 0.2);
+                        ctx.lineTo(x, height * 0.8);
+                        ctx.stroke();
+                    }
+                }
+                
+                // Draw downbeats (stronger lines)
+                ctx.strokeStyle = '#333333';
+                ctx.lineWidth = 2;
                 
                 downbeats.forEach((beatTime, index) => {
                     const x = (beatTime / duration) * width;
@@ -611,15 +680,15 @@
                     ctx.lineTo(x, height);
                     ctx.stroke();
                     
-                    // Add beat numbers every 4 beats (bars)
+                    // Add bar numbers every 4 beats (downbeats)
                     if (index % 4 === 0) {
                         ctx.fillStyle = '#333333';
-                        ctx.font = '10px Arial';
-                        ctx.fillText(`${Math.floor(index/4) + 1}`, x + 2, 12);
+                        ctx.font = '12px Arial';
+                        ctx.fillText(`${Math.floor(index/4) + 1}`, x + 3, 15);
                     }
                 });
                 
-                console.log(`✅ Drew timeline with ${downbeats.length} beats`);
+                console.log(`✅ Drew beat grid with ${downbeats.length} downbeats`);
             }
             
             // CHORD DEBUGGING: Check what we actually have
@@ -639,21 +708,21 @@
                     
                     console.log(`🎵 Chord ${index} position: x=${startX.toFixed(1)} width=${chordWidth.toFixed(1)}`);
                     
-                    // Draw chord rectangle with border for visibility
-                    ctx.fillStyle = '#0066cc';
-                    ctx.fillRect(startX, height - 40, chordWidth, 30);
+                    // Draw larger chord rectangle in gray
+                    ctx.fillStyle = '#cccccc';
+                    ctx.fillRect(startX, height - 60, chordWidth, 50);  // Much larger: 50px height
                     
                     // Draw border
-                    ctx.strokeStyle = '#003399';
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(startX, height - 40, chordWidth, 30);
+                    ctx.strokeStyle = '#999999';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(startX, height - 60, chordWidth, 50);
                     
-                    // Draw chord label in white
-                    if (chordWidth > 15) {
-                        ctx.fillStyle = '#ffffff';
-                        ctx.font = 'bold 14px Arial';
+                    // Draw chord label in BLACK - larger font
+                    if (chordWidth > 10) {  // Show labels for smaller chords too
+                        ctx.fillStyle = '#000000';
+                        ctx.font = 'bold 16px Arial';  // Larger font
                         ctx.textAlign = 'center';
-                        ctx.fillText(chord.chord, startX + chordWidth/2, height - 20);
+                        ctx.fillText(chord.chord, startX + chordWidth/2, height - 30);  // Centered in larger box
                         ctx.textAlign = 'left';
                     }
                 });
