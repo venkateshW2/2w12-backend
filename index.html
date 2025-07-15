@@ -45,21 +45,44 @@
             </p>
         </header>
 
-        <!-- Upload Area -->
-        <div id="uploadArea" class="mb-12 animate-slide-up">
-            <div class="bg-white rounded-2xl shadow-lg border-2 border-dashed border-gray-200 hover:border-gray-300 transition-all duration-300 hover:shadow-xl cursor-pointer group">
-                <div class="p-12 text-center">
-                    <div class="w-16 h-16 mx-auto mb-6 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-gray-200 transition-colors duration-300">
-                        <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                        </svg>
+        <!-- Compact Upload Area -->
+        <div id="uploadArea" class="mb-8 animate-slide-up">
+            <div class="bg-white rounded-xl shadow-md border border-gray-200 hover:shadow-lg transition-all duration-300 cursor-pointer group">
+                <div class="p-6 text-center">
+                    <div class="flex items-center justify-center space-x-4">
+                        <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-gray-200 transition-colors duration-300">
+                            <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                            </svg>
+                        </div>
+                        <div class="text-left">
+                            <h3 class="text-lg font-semibold text-gray-900">Upload Audio File</h3>
+                            <p class="text-sm text-gray-600">MP3, WAV, FLAC, AAC • Max 750MB</p>
+                        </div>
                     </div>
-                    <h3 class="text-xl font-semibold text-gray-900 mb-2">Upload Audio File</h3>
-                    <p class="text-gray-600 mb-4">Drag and drop your audio file here, or click to browse</p>
-                    <p class="text-sm text-gray-500">Supports MP3, WAV, FLAC, AAC • Maximum 150MB</p>
                 </div>
             </div>
             <input type="file" id="fileInput" accept="audio/*" class="hidden">
+        </div>
+
+        <!-- File Info Bar (Hidden by default) -->
+        <div id="fileInfoBar" class="mb-8 hidden">
+            <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l6 6-6 6z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-semibold text-blue-900" id="currentFileName">No file selected</p>
+                        <p class="text-sm text-blue-600" id="currentFileInfo">Ready to analyze</p>
+                    </div>
+                </div>
+                <button id="changeFileBtn" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                    📁 Change File
+                </button>
+            </div>
         </div>
 
         <!-- Processing Section -->
@@ -144,11 +167,11 @@
                 </div>
             </div>
 
-            <!-- Waveform Visualization -->
+            <!-- Clean Timeline Overview -->
             <div class="bg-white rounded-2xl shadow-lg mb-8 animate-slide-up">
                 <div class="p-6 border-b border-gray-100">
                     <div class="flex items-center justify-between">
-                        <h3 class="text-xl font-semibold text-gray-900">Waveform, Downbeats & Chords</h3>
+                        <h3 class="text-xl font-semibold text-gray-900">Timeline Overview</h3>
                         <div class="flex items-center space-x-4 text-sm text-gray-600">
                             <span id="waveformInfo" class="font-mono">Loading...</span>
                         </div>
@@ -156,31 +179,31 @@
                 </div>
                 <div class="p-6">
                     <div class="relative">
-                        <canvas id="waveformCanvas" class="w-full bg-gray-50 rounded-xl border border-gray-200 cursor-crosshair" style="height: 200px;"></canvas>
+                        <canvas id="waveformCanvas" class="w-full bg-gray-50 rounded-xl border border-gray-200 cursor-crosshair" style="height: 180px;"></canvas>
                         <div id="waveformControls" class="mt-4 flex items-center justify-between">
                             <div class="flex items-center space-x-6 text-sm text-gray-600">
                                 <span id="currentTime" class="font-mono">00:00</span>
                                 <span>/</span>
                                 <span id="totalDuration" class="font-mono">00:00</span>
                                 <span class="text-gray-400">•</span>
-                                <span id="downbeatCount" class="font-mono">0 downbeats</span>
+                                <span id="regionCount" class="font-mono">0 regions</span>
                             </div>
                             <div class="flex items-center space-x-2">
-                                <button id="exportBtn" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors duration-200">Export PNG</button>
-                                <button id="resetBtn" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors duration-200">Reset</button>
+                                <button id="exportBtn" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors duration-200">📊 Export</button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Region Analysis Results -->
-            <div id="regionAnalysisSection" class="hidden mb-8">
-                <div class="bg-white rounded-2xl shadow-lg p-6 animate-slide-up">
-                    <h3 class="text-xl font-semibold text-gray-900 mb-6">Region Analysis Results</h3>
-                    <div id="regionsList" class="space-y-4">
-                        <!-- Populated by JavaScript -->
-                    </div>
+            <!-- Region Cards Grid -->
+            <div id="regionCardsSection" class="mb-8 animate-slide-up">
+                <div class="mb-6">
+                    <h3 class="text-2xl font-semibold text-gray-900 mb-2">Region Analysis</h3>
+                    <p class="text-gray-600">Individual analysis results for each detected region</p>
+                </div>
+                <div id="regionCardsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    <!-- Populated by JavaScript -->
                 </div>
             </div>
 
@@ -248,6 +271,11 @@
         function initializeInterface() {
             // Upload area click handler
             document.getElementById('uploadArea').addEventListener('click', () => {
+                document.getElementById('fileInput').click();
+            });
+            
+            // Change file button handler
+            document.getElementById('changeFileBtn').addEventListener('click', () => {
                 document.getElementById('fileInput').click();
             });
 
@@ -358,6 +386,14 @@
 
         async function processFile(file) {
             console.log(`Processing file: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+            
+            // Hide upload area and show file info bar
+            document.getElementById('uploadArea').classList.add('hidden');
+            document.getElementById('fileInfoBar').classList.remove('hidden');
+            
+            // Update file info
+            document.getElementById('currentFileName').textContent = file.name;
+            document.getElementById('currentFileInfo').textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB • Processing...`;
             
             // Show processing section
             document.getElementById('processingSection').classList.remove('hidden');
@@ -574,7 +610,7 @@
             
             // Update info displays
             updateTimeDisplay();
-            document.getElementById('downbeatCount').textContent = `${downbeats.length} downbeats • ${chords.length} chords`;
+            document.getElementById('regionCount').textContent = `${contentRegions.length} regions`;
             document.getElementById('waveformInfo').textContent = `${waveformData.width} points • ${duration.toFixed(1)}s`;
             
             // Update technical info
@@ -736,97 +772,7 @@
             ctx.moveTo(0, centerY);
             ctx.lineTo(width, centerY);
             ctx.stroke();
-            
-            // DAW-STYLE TIMELINE: Beat grid with downbeats and sub-beats
-            if (downbeats.length > 0 && duration > 0) {
-                console.log(`🥁 Drawing ${downbeats.length} downbeats as timeline`);
-                
-                // Calculate approximate BPM from downbeats
-                const avgInterval = downbeats.length > 1 ? 
-                    (downbeats[downbeats.length-1] - downbeats[0]) / (downbeats.length - 1) : 2.5;
-                const beatInterval = avgInterval / 4; // 4 beats per downbeat
-                
-                // Draw sub-beats (lighter lines)
-                ctx.strokeStyle = '#dddddd';
-                ctx.lineWidth = 1;
-                for (let i = 0; i < downbeats.length - 1; i++) {
-                    const startTime = downbeats[i];
-                    const endTime = downbeats[i + 1];
-                    
-                    // Draw 3 sub-beats between each downbeat
-                    for (let beat = 1; beat <= 3; beat++) {
-                        const beatTime = startTime + (beat * (endTime - startTime) / 4);
-                        const x = (beatTime / duration) * width;
-                        ctx.beginPath();
-                        ctx.moveTo(x, height * 0.2);
-                        ctx.lineTo(x, height * 0.8);
-                        ctx.stroke();
-                    }
-                }
-                
-                // Draw downbeats (stronger lines)
-                ctx.strokeStyle = '#333333';
-                ctx.lineWidth = 2;
-                
-                downbeats.forEach((beatTime, index) => {
-                    const x = (beatTime / duration) * width;
-                    ctx.beginPath();
-                    ctx.moveTo(x, 0);
-                    ctx.lineTo(x, height);
-                    ctx.stroke();
-                    
-                    // Add bar numbers every 4 beats (downbeats)
-                    if (index % 4 === 0) {
-                        ctx.fillStyle = '#333333';
-                        ctx.font = '12px Arial';
-                        ctx.fillText(`${Math.floor(index/4) + 1}`, x + 3, 15);
-                    }
-                });
-                
-                console.log(`✅ Drew beat grid with ${downbeats.length} downbeats`);
             }
-            
-            // CHORD DEBUGGING: Check what we actually have
-            if (chords.length > 0 && duration > 0) {
-                console.log(`🎵 Drawing ${chords.length} chords, duration: ${duration}s`);
-                console.log(`🎵 First chord sample:`, chords[0]);
-                
-                chords.forEach((chord, index) => {
-                    // Debug each chord
-                    if (index < 3) {
-                        console.log(`🎵 Chord ${index}: "${chord.chord}" from ${chord.start}s to ${chord.end}s`);
-                    }
-                    
-                    const startX = (chord.start / duration) * width;
-                    const endX = (chord.end / duration) * width;
-                    const chordWidth = endX - startX;
-                    
-                    console.log(`🎵 Chord ${index} position: x=${startX.toFixed(1)} width=${chordWidth.toFixed(1)}`);
-                    
-                    // Draw larger chord rectangle in gray
-                    ctx.fillStyle = '#cccccc';
-                    ctx.fillRect(startX, height - 60, chordWidth, 50);  // Much larger: 50px height
-                    
-                    // Draw border
-                    ctx.strokeStyle = '#999999';
-                    ctx.lineWidth = 1;
-                    ctx.strokeRect(startX, height - 60, chordWidth, 50);
-                    
-                    // Draw chord label in BLACK - larger font
-                    if (chordWidth > 10) {  // Show labels for smaller chords too
-                        ctx.fillStyle = '#000000';
-                        ctx.font = 'bold 16px Arial';  // Larger font
-                        ctx.textAlign = 'center';
-                        ctx.fillText(chord.chord, startX + chordWidth/2, height - 30);  // Centered in larger box
-                        ctx.textAlign = 'left';
-                    }
-                });
-                
-                console.log(`✅ Drew ${chords.length} chord blocks`);
-            } else {
-                console.log(`⚠️ No chords to draw: count=${chords.length}, duration=${duration}`);
-            }
-            
             
             // Draw current time cursor
             if (currentTime > 0) {
@@ -903,92 +849,100 @@
         }
 
         function loadRegionAnalysis(result) {
-            const regionAnalysisSection = document.getElementById('regionAnalysisSection');
-            const regionsList = document.getElementById('regionsList');
+            const regionCardsSection = document.getElementById('regionCardsSection');
+            const regionCardsGrid = document.getElementById('regionCardsGrid');
             
             // Check if region analysis is available
             if (result.analysis?.region_analysis?.regions && result.analysis.region_analysis.regions.length > 0) {
-                regionAnalysisSection.classList.remove('hidden');
+                regionCardsSection.classList.remove('hidden');
                 
                 // Clear existing content
-                regionsList.innerHTML = '';
+                regionCardsGrid.innerHTML = '';
                 
-                // Add region analysis results
+                // Add region analysis results as cards
                 result.analysis.region_analysis.regions.forEach((region, index) => {
                     const regionInfo = region.region_info;
                     const analysisResults = region.analysis_results;
-                    const performance = region.performance;
                     
                     const regionCard = document.createElement('div');
-                    regionCard.className = 'bg-gray-50 rounded-xl p-4 border border-gray-200';
+                    regionCard.className = 'bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 border border-gray-200';
                     
-                    let regionContent = `
-                        <div class="flex items-center justify-between mb-3">
-                            <h4 class="text-lg font-semibold text-gray-900">
-                                Region ${regionInfo.region_number}: ${regionInfo.content_type.toUpperCase()}
-                            </h4>
-                            <span class="text-sm text-gray-600 font-mono">
-                                ${regionInfo.start_time.toFixed(1)}s - ${regionInfo.end_time.toFixed(1)}s
-                            </span>
+                    // Get key and tempo info
+                    const keyInfo = analysisResults.key_detection || {};
+                    const tempoInfo = analysisResults.tempo_detection || {};
+                    const downbeatInfo = analysisResults.downbeat_detection || {};
+                    const danceInfo = analysisResults.danceability || {};
+                    
+                    regionCard.innerHTML = `
+                        <div class="p-6">
+                            <!-- Header -->
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-lg font-semibold text-gray-900">
+                                    Region ${regionInfo.region_number}
+                                </h4>
+                                <span class="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded">
+                                    ${regionInfo.content_type.toUpperCase()}
+                                </span>
+                            </div>
+                            
+                            <!-- Time Info -->
+                            <div class="mb-4">
+                                <div class="text-sm text-gray-600 mb-1">Timeline</div>
+                                <div class="font-mono text-sm text-gray-900">
+                                    ${formatTime(regionInfo.start_time)} - ${formatTime(regionInfo.end_time)}
+                                </div>
+                                <div class="text-xs text-gray-500">
+                                    ${regionInfo.duration.toFixed(1)}s duration
+                                </div>
+                            </div>
+                            
+                            <!-- Analysis Results -->
+                            <div class="space-y-3">
+                                ${keyInfo.key ? `
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm text-gray-600">Key</span>
+                                        <span class="font-semibold text-purple-600">${keyInfo.key}</span>
+                                    </div>
+                                ` : ''}
+                                
+                                ${tempoInfo.tempo ? `
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm text-gray-600">Tempo</span>
+                                        <span class="font-semibold text-blue-600">${tempoInfo.tempo.toFixed(0)} BPM</span>
+                                    </div>
+                                ` : ''}
+                                
+                                ${downbeatInfo.downbeat_count !== undefined ? `
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm text-gray-600">Downbeats</span>
+                                        <span class="font-semibold text-green-600">${downbeatInfo.downbeat_count}</span>
+                                    </div>
+                                ` : ''}
+                                
+                                ${danceInfo.score !== undefined ? `
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm text-gray-600">Danceability</span>
+                                        <span class="font-semibold text-orange-600">${(danceInfo.score * 100).toFixed(0)}%</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                            
+                            <!-- Action Button -->
+                            <div class="mt-4 pt-4 border-t border-gray-100">
+                                <button class="w-full bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-medium py-2 px-4 rounded-lg transition-colors duration-200">
+                                    ▶️ Focus Region
+                                </button>
+                            </div>
                         </div>
-                        
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
-                            <div class="text-center">
-                                <div class="text-2xl font-bold text-blue-600">${regionInfo.duration.toFixed(1)}s</div>
-                                <div class="text-sm text-gray-600">Duration</div>
-                            </div>
-                            <div class="text-center">
-                                <div class="text-2xl font-bold text-green-600">${(regionInfo.confidence * 100).toFixed(0)}%</div>
-                                <div class="text-sm text-gray-600">Confidence</div>
-                            </div>
                     `;
                     
-                    // Add musical analysis results if available
-                    if (analysisResults.key_detection) {
-                        regionContent += `
-                            <div class="text-center">
-                                <div class="text-2xl font-bold text-purple-600">${analysisResults.key_detection.key}</div>
-                                <div class="text-sm text-gray-600">Key</div>
-                            </div>
-                        `;
-                    }
-                    
-                    if (analysisResults.tempo_detection) {
-                        regionContent += `
-                            <div class="text-center">
-                                <div class="text-2xl font-bold text-red-600">${analysisResults.tempo_detection.tempo.toFixed(0)}</div>
-                                <div class="text-sm text-gray-600">BPM</div>
-                            </div>
-                        `;
-                    }
-                    
-                    regionContent += `</div>`;
-                    
-                    // Add downbeat information if available
-                    if (analysisResults.downbeat_detection) {
-                        regionContent += `
-                            <div class="flex items-center justify-between text-sm text-gray-600">
-                                <span>Downbeats: ${analysisResults.downbeat_detection.downbeat_count}</span>
-                                <span>Meter: ${analysisResults.downbeat_detection.meter}</span>
-                            </div>
-                        `;
-                    }
-                    
-                    // Add performance information
-                    if (performance) {
-                        regionContent += `
-                            <div class="mt-2 text-sm text-gray-500">
-                                Analysis: ${performance.analysis_time}s (${performance.realtime_factor.toFixed(2)}x realtime)
-                            </div>
-                        `;
-                    }
-                    
-                    regionCard.innerHTML = regionContent;
-                    regionsList.appendChild(regionCard);
+                    regionCardsGrid.appendChild(regionCard);
                 });
                 
+                console.log(`✅ Created ${result.analysis.region_analysis.regions.length} region cards`);
             } else {
-                regionAnalysisSection.classList.add('hidden');
+                regionCardsSection.classList.add('hidden');
+                console.log('❌ No region analysis data available');
             }
         }
     </script>
