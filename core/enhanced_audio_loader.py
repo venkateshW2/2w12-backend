@@ -1273,15 +1273,40 @@ class EnhancedAudioLoader:
                     'confidence': ml_analysis.get('ml_tempo_confidence', 0.0)
                 }
                 
-                # Downbeat detection (adjust timestamps to global timeline)
-                madmom_analysis = self._madmom_content_aware_analysis(audio_segment, sr, [region])
-                if madmom_analysis.get('madmom_downbeat_times'):
-                    # Adjust downbeat times to global timeline
-                    adjusted_downbeats = [t + start_time for t in madmom_analysis['madmom_downbeat_times']]
+                # Downbeat detection - create temporary file for this region
+                import tempfile
+                import soundfile as sf
+                
+                try:
+                    # Create temporary file for this region
+                    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_region_file:
+                        tmp_region_path = tmp_region_file.name
+                        sf.write(tmp_region_path, audio_segment, sr)
+                    
+                    # Analyze this region with Madmom
+                    madmom_analysis = self._madmom_content_aware_analysis(tmp_region_path, [region])
+                    
+                    if madmom_analysis.get('madmom_downbeat_times'):
+                        # Adjust downbeat times to global timeline
+                        adjusted_downbeats = [t + start_time for t in madmom_analysis['madmom_downbeat_times']]
+                        region_result['analysis_results']['downbeat_detection'] = {
+                            'downbeat_times': adjusted_downbeats,
+                            'downbeat_count': len(adjusted_downbeats),
+                            'meter': madmom_analysis.get('madmom_meter_detection', '4/4')
+                        }
+                    
+                    # Clean up temporary file
+                    import os
+                    if os.path.exists(tmp_region_path):
+                        os.unlink(tmp_region_path)
+                        
+                except Exception as e:
+                    print(f"         ⚠️ Downbeat analysis failed for region {region_number}: {e}")
                     region_result['analysis_results']['downbeat_detection'] = {
-                        'downbeat_times': adjusted_downbeats,
-                        'downbeat_count': len(adjusted_downbeats),
-                        'meter': madmom_analysis.get('madmom_meter_detection', '4/4')
+                        'downbeat_times': [],
+                        'downbeat_count': 0,
+                        'meter': '4/4',
+                        'error': str(e)
                     }
                 
                 # Danceability
