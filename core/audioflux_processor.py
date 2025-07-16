@@ -170,11 +170,11 @@ class AudioFluxProcessor:
             logger.info(f"🎵 Chroma analysis: {duration:.1f}s audio, {n_frames} frames, {fft_length} FFT size")
             
             try:
-                # Use AudioFlux for chroma extraction
+                # Use AudioFlux for chroma extraction (fix API parameters)
                 chroma_processor = af.Spectral(
-                    sample_rate=sr,
-                    fft_length=fft_length,
-                    hop_length=hop_length
+                    samplate=sr,  # AudioFlux uses 'samplate' not 'sample_rate'
+                    radix2_exp=13,  # 2^13 = 8192 FFT length
+                    slide_length=hop_length
                 )
                 
                 # Extract chroma features
@@ -535,8 +535,9 @@ class AudioFluxProcessor:
             mel_features = self.extract_mel_coefficients_fast(y)
             spectral_features = self.extract_spectral_features_fast(y)
             
-            # NEW: Advanced AudioFlux features (pitch, harmonic, temporal)
-            advanced_features = self.extract_advanced_audioflux_features(y)
+            # DISABLED: Advanced AudioFlux features (causing API errors)
+            # advanced_features = self.extract_advanced_audioflux_features(y)
+            advanced_features = {"audioflux_advanced_features": "disabled_due_to_api_errors"}
             
             # Combine all AudioFlux features
             comprehensive_result = {
