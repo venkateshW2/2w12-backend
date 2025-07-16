@@ -380,12 +380,29 @@ async def analyze_audio_streaming(file: UploadFile = File(...)):
                 # Submit analysis task
                 future = executor.submit(run_analysis)
                 
-                # Send progress updates while analysis runs
+                # Send realistic progress updates while analysis runs
                 progress = 30
+                analysis_stages = [
+                    "Loading audio and content detection...",
+                    "GPU ML analysis: Key detection starting...",
+                    "GPU ML analysis: Tempo CNN processing...",
+                    "GPU ML analysis: Danceability analysis...",
+                    "Madmom downbeat detection...",
+                    "AudioFlux feature extraction...",
+                    "Finalizing results..."
+                ]
+                stage_index = 0
+                
                 while not future.done():
-                    yield f"data: {json.dumps({'status': 'analyzing', 'message': 'GPU batch processing in progress...', 'progress': min(progress, 85)})}\n\n"
-                    await asyncio.sleep(2)  # Send update every 2 seconds
-                    progress += 10
+                    if stage_index < len(analysis_stages):
+                        message = analysis_stages[stage_index]
+                        stage_index += 1
+                    else:
+                        message = "GPU batch processing in progress..."
+                    
+                    yield f"data: {json.dumps({'status': 'analyzing', 'message': message, 'progress': min(progress, 85)})}\n\n"
+                    await asyncio.sleep(3)  # Send update every 3 seconds
+                    progress += 8
                 
                 # Get final result
                 result = future.result()
