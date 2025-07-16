@@ -304,7 +304,7 @@ class MadmomProcessor:
                 "madmom_error": str(e)
             }
     
-    def analyze_downbeats_timeline(self, audio_file_path: str) -> Dict[str, Any]:
+    def analyze_downbeats_timeline(self, audio_file_path: str = None, audio_data: np.ndarray = None, sr: int = None) -> Dict[str, Any]:
         """
         FOCUSED: Downbeat detection and meter analysis with timeline generation
         Uses ffmpeg for robust file loading
@@ -317,7 +317,7 @@ class MadmomProcessor:
                 "madmom_status": "processors_not_loaded"
             }
         
-        logger.info(f"🥁 Starting Madmom downbeat analysis for: {audio_file_path}")
+        logger.info(f"🥁 Starting Madmom downbeat analysis...")
         
         try:
             # Import required processors
@@ -325,11 +325,21 @@ class MadmomProcessor:
             from madmom.features.downbeats import RNNDownBeatProcessor, DBNDownBeatTrackingProcessor
             from madmom.features.beats import RNNBeatProcessor, BeatTrackingProcessor
             
-            # Load audio with ffmpeg support
-            logger.info("🔄 Loading audio with ffmpeg support...")
-            sig = SignalProcessor(num_channels=1, sample_rate=22050, norm=True)
-            frames = sig(audio_file_path)
-            logger.info(f"✅ Audio loaded: {len(frames)} frames")
+            # Use provided audio data or load from file
+            if audio_data is not None and sr is not None:
+                logger.info("🔄 Using provided audio data...")
+                # Convert to mono if stereo
+                if len(audio_data.shape) > 1:
+                    audio_data = np.mean(audio_data, axis=1)
+                # Normalize
+                frames = audio_data / np.max(np.abs(audio_data)) if np.max(np.abs(audio_data)) > 0 else audio_data
+                logger.info(f"✅ Audio data prepared: {len(frames)} samples at {sr}Hz")
+            else:
+                # Fallback to file loading
+                logger.info("🔄 Loading audio from file with ffmpeg support...")
+                sig = SignalProcessor(num_channels=1, sample_rate=22050, norm=True)
+                frames = sig(audio_file_path)
+                logger.info(f"✅ Audio loaded: {len(frames)} frames")
             
             # OPTIMIZED: Downbeat-ONLY detection (no beat tracking)
             logger.info("🔄 Downbeat-ONLY detection (no beat tracking)...")

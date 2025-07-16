@@ -341,6 +341,12 @@ async def analyze_audio_streaming(file: UploadFile = File(...)):
             await asyncio.sleep(0.1)
             
             # Step 3: Start analysis in background thread with proper error handling
+            progress_data = {"status": "analyzing", "progress": 30, "message": "Starting analysis..."}
+            
+            def progress_callback(stage, message, progress):
+                nonlocal progress_data
+                progress_data = {"status": stage, "message": message, "progress": progress}
+            
             def run_analysis():
                 try:
                     # Set up logging for the thread
@@ -366,8 +372,8 @@ async def analyze_audio_streaming(file: UploadFile = File(...)):
                         # No event loop in this thread - this is expected and good
                         pass
                     
-                    # Run analysis synchronously (no asyncio in thread)
-                    result = enhanced_loader.analyze_with_caching(file_content, filename)
+                    # Run analysis synchronously (no asyncio in thread) with progress callback
+                    result = enhanced_loader.analyze_with_caching(file_content, filename, progress_callback)
                     thread_logger.info(f"✅ Analysis completed for {filename}")
                     return result
                 except Exception as e:
@@ -380,29 +386,19 @@ async def analyze_audio_streaming(file: UploadFile = File(...)):
                 # Submit analysis task
                 future = executor.submit(run_analysis)
                 
-                # Send realistic progress updates while analysis runs
-                progress = 30
-                analysis_stages = [
-                    "Loading audio and content detection...",
-                    "GPU ML analysis: Key detection starting...",
-                    "GPU ML analysis: Tempo CNN processing...",
-                    "GPU ML analysis: Danceability analysis...",
-                    "Madmom downbeat detection...",
-                    "AudioFlux feature extraction...",
-                    "Finalizing results..."
-                ]
-                stage_index = 0
+                # Send REAL progress updates while analysis runs
+                last_message = ""
                 
                 while not future.done():
-                    if stage_index < len(analysis_stages):
-                        message = analysis_stages[stage_index]
-                        stage_index += 1
-                    else:
-                        message = "GPU batch processing in progress..."
+                    # Get current progress from the analysis thread
+                    current_progress = progress_data.copy()
                     
-                    yield f"data: {json.dumps({'status': 'analyzing', 'message': message, 'progress': min(progress, 85)})}\n\n"
-                    await asyncio.sleep(3)  # Send update every 3 seconds
-                    progress += 8
+                    # Only send update if message changed (avoid spam)
+                    if current_progress["message"] != last_message:
+                        yield f"data: {json.dumps(current_progress)}\n\n"
+                        last_message = current_progress["message"]
+                    
+                    await asyncio.sleep(0.5)  # Check every 500ms for real-time updates
                 
                 # Get final result
                 result = future.result()
@@ -437,12 +433,21 @@ async def analyze_audio_with_visualization(file: UploadFile = File(...)):
     - No librosa dependency - pure AudioFlux approach
     """
     
-    # File validation
-    if not file.filename.lower().endswith(('.wav', '.mp3', '.flac', '.m4a', '.aac')):
-        raise HTTPException(
-            status_code=400, 
-            detail="Unsupported audio format. Supported: WAV, MP3, FLAC, M4A, AAC"
-        )
+    try:
+        # Debug logging
+        logger.info(f"🔍 Visualization request: filename={file.filename}, content_type={file.content_type}")
+        
+        # File validation with better error handling
+        if not file.filename or not file.filename.lower().endswith(('.wav', '.mp3', '.flac', '.m4a', '.aac')):
+            logger.error(f"❌ Invalid file format: {file.filename}")
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Unsupported audio format: {file.filename}. Supported: WAV, MP3, FLAC, M4A, AAC"
+            )
+            
+    except Exception as validation_error:
+        logger.error(f"❌ File validation error: {validation_error}")
+        raise HTTPException(status_code=400, detail=f"File validation failed: {str(validation_error)}")
     
     try:
         # Read file content
@@ -469,10 +474,10 @@ async def analyze_audio_with_visualization(file: UploadFile = File(...)):
         tmp_file_path = tmp_file.name
         
         try:
-            # Use AudioFlux to read audio (no librosa!)
-            import audioflux as af
-            audio_data, sr = af.read(tmp_file_path)
-            logger.info(f"🎵 AudioFlux loaded: {len(audio_data)} samples at {sr}Hz")
+            # Use soundfile to read audio (AudioFlux doesn't have read function)
+            import soundfile as sf
+            audio_data, sr = sf.read(tmp_file_path)
+            logger.info(f"🎵 Audio loaded: {len(audio_data)} samples at {sr}Hz")
             
             # Run standard analysis
             result = enhanced_loader.analyze_with_caching(file_content, file.filename)

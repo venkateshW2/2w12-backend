@@ -41,8 +41,7 @@ class EssentiaModelManager:
             "audio_features": "models/audioset-vggish-3.pb",  # VGGish 1.86MB - WORKING
             
             # TEMPO MODEL (DOWNLOADED):
-            "tempo_cnn": "models/deeptemp-k4-3.pb",  # Smaller DeepTemp model (less likely to cause cppPool errors)
-            "tempo_vggish": "models/audioset-vggish-3.pb",  # VGGish as alternative tempo model
+            "tempo_cnn": "models/deeptemp-k4-3.pb",  # Downloaded tempo model (using k4)
             
             # Disabled empty models:
             # "tempo_classification": "models/Danceability Audioset Yamnet.pb",  # EMPTY - DISABLED
@@ -90,9 +89,17 @@ class EssentiaModelManager:
             else:
                 logger.info("⚠️ VGGish model temporarily disabled due to GraphDef errors")
             
-            # Genre Classification Model - DISABLED (not useful for core analysis)
-            # Removed as per user request - focus on key detection, tempo, and danceability
-            logger.info("⚠️ Genre classification model disabled - not essential for core analysis")
+            # Genre Classification Model (Discogs 400 classes)
+            if self._model_exists("genre_classification"):
+                try:
+                    self.available_models["genre_classification"] = es.TensorflowPredict(
+                        graphFilename=self.model_paths["genre_classification"],
+                        inputs=["Func/PartitionedCall/input/_0"],  # Fixed: Use actual node name
+                        outputs=["PartitionedCall/model_8/activations/Sigmoid"]  # Fixed: Use actual output node
+                    )
+                    logger.info("✅ Genre classification model loaded")
+                except Exception as e:
+                    logger.warning(f"⚠️ Genre classification model failed to load: {e}")
                     
             # Danceability Model (using correct output node)
             if self._model_exists("danceability"):
@@ -328,80 +335,9 @@ class EssentiaModelManager:
     def analyze_tempo_ml(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
         """ML-based tempo detection - PRIORITY #1 FIX: Make Essentia do TWO jobs efficiently"""
         
-        # TRY MULTIPLE TEMPO MODELS in order of preference
-        tempo_models_to_try = [
-            ("tempo_cnn", "DeepTemp K4 CNN"),
-            ("tempo_vggish", "VGGish Audio Features"),
-            ("audio_features", "VGGish Fallback")
-        ]
-        
-        for model_key, model_name in tempo_models_to_try:
-            if model_key in self.available_models:
-                logger.info(f"🎵 Attempting {model_name} for tempo analysis...")
-                
-                try:
-                    # Try simple direct audio input first (avoid cppPool issues)
-                    logger.info(f"🔧 Trying {model_name} with direct audio input...")
-                    
-                    # Prepare audio
-                    audio_chunk = y[:sr * 30].astype(np.float32)  # Max 30 seconds
-                    if len(audio_chunk) == 0:
-                        continue
-                    
-                    # Try the model
-                    result = self.available_models[model_key](audio_chunk)
-                    
-                    # Process result based on model type
-                    if model_key == "tempo_cnn":
-                        # DeepTemp CNN returns tempo predictions
-                        if hasattr(result, '__iter__') and not isinstance(result, str):
-                            tempo_value = float(np.mean(result))
-                        else:
-                            tempo_value = float(result)
-                        
-                        # Map to reasonable tempo range
-                        if tempo_value < 1:
-                            tempo_value = tempo_value * 200 + 60  # Scale to 60-260 BPM
-                        elif tempo_value > 300:
-                            tempo_value = tempo_value % 200 + 60  # Wrap to reasonable range
-                        
-                        return {
-                            "ml_tempo": round(tempo_value, 1),
-                            "ml_tempo_confidence": 0.8,
-                            "ml_model": f"essentia_{model_key}",
-                            "ml_tempo_method": "direct_audio_input",
-                            "ml_preprocessing": "simplified_approach",
-                            "cppPool_error_avoided": True
-                        }
-                    
-                    elif model_key in ["tempo_vggish", "audio_features"]:
-                        # VGGish models return feature vectors - estimate tempo from features
-                        if hasattr(result, '__iter__') and not isinstance(result, str):
-                            # Use feature analysis to estimate tempo
-                            features = np.array(result).flatten()
-                            # Simple heuristic: use feature variance patterns
-                            tempo_estimate = 120.0 + (np.std(features) * 50)  # Basic estimation
-                            tempo_estimate = max(60, min(200, tempo_estimate))  # Clamp to reasonable range
-                            
-                            return {
-                                "ml_tempo": round(tempo_estimate, 1),
-                                "ml_tempo_confidence": 0.6,
-                                "ml_model": f"essentia_{model_key}",
-                                "ml_tempo_method": "vggish_feature_analysis",
-                                "ml_preprocessing": "feature_based_estimation",
-                                "cppPool_error_avoided": True
-                            }
-                    
-                except Exception as model_error:
-                    logger.warning(f"⚠️ {model_name} failed: {model_error}")
-                    continue  # Try next model
-                
-                logger.info(f"✅ {model_name} succeeded!")
-                break  # Success, don't try other models
-            
-        # If all models failed, try the old approach
+        # TRY TEMPO CNN FIRST with different preprocessing approaches
         if "tempo_cnn" in self.available_models:
-            logger.info("🔧 Falling back to complex preprocessing approach...")
+            logger.info("🎵 Attempting Tempo CNN with cppPool error fixes...")
             
             try:
                 # APPROACH 1: Direct Essentia preprocessing (no librosa)
@@ -414,34 +350,23 @@ class EssentiaModelManager:
                 windowing = es.Windowing(type='hann')
                 fft = es.FFT()
                 
-                # FIX: Use proper sample rate for DeepTemp model (expects 22050Hz)
-                # Resample if needed to match model training data
-                if sr != 22050:
-                    logger.info(f"🔧 Resampling from {sr}Hz to 22050Hz for DeepTemp model")
-                    import librosa
-                    y_resampled = librosa.resample(y, orig_sr=sr, target_sr=22050)
-                    model_sr = 22050
-                else:
-                    y_resampled = y
-                    model_sr = sr
+                # FIX: Calculate proper high frequency bound to avoid Nyquist error
+                nyquist_freq = sr / 2.0
+                # Use 95% of Nyquist frequency as safe upper bound
+                high_freq = min(11025, nyquist_freq * 0.95)  # Max 11kHz or 95% of Nyquist
                 
-                # Use model-specific parameters
-                nyquist_freq = model_sr / 2.0
-                # DeepTemp expects mel bands up to 8kHz typically
-                high_freq = min(8000, nyquist_freq * 0.9)  # 8kHz max for tempo analysis
-                
-                logger.info(f"🔧 MelBands config: sr={model_sr}, nyquist={nyquist_freq}, high_freq={high_freq}")
+                logger.info(f"🔧 MelBands config: sr={sr}, nyquist={nyquist_freq}, high_freq={high_freq}")
                 
                 mel_bands = es.MelBands(
                     numberBands=80, 
-                    sampleRate=model_sr,
-                    lowFrequencyBound=40,  # Start at 40Hz for tempo analysis
+                    sampleRate=sr,
+                    lowFrequencyBound=0,
                     highFrequencyBound=high_freq
                 )
                 
                 # Process in smaller chunks to avoid memory issues
-                chunk_size = min(len(y_resampled), model_sr * 10)  # Max 10 seconds at a time
-                audio_chunk = y_resampled[:chunk_size].astype(np.float32)
+                chunk_size = min(len(y), sr * 10)  # Max 10 seconds at a time
+                audio_chunk = y[:chunk_size].astype(np.float32)
                 
                 # Create mel spectrogram using Essentia with error handling
                 mel_frames = []
@@ -462,60 +387,8 @@ class EssentiaModelManager:
                                 
                 except Exception as mel_error:
                     logger.warning(f"⚠️ MelBands processing failed: {mel_error}")
-                    # Try alternative approach without MelBands
-                    logger.info("🔧 Trying alternative approach: Direct audio input")
-                    
-                    # Some CNN models accept raw audio input
-                    try:
-                        # Normalize audio to [-1, 1] range
-                        audio_normalized = audio_chunk / np.max(np.abs(audio_chunk)) if np.max(np.abs(audio_chunk)) > 0 else audio_chunk
-                        
-                        # Try different input formats
-                        input_formats = [
-                            audio_normalized,  # Raw audio
-                            audio_normalized.reshape(1, -1),  # Batch dimension
-                            audio_normalized.reshape(-1, 1),  # Channel dimension
-                        ]
-                        
-                        for fmt_idx, audio_input in enumerate(input_formats):
-                            try:
-                                logger.info(f"🔧 Trying audio format {fmt_idx+1}: {audio_input.shape}")
-                                tempo_prediction = self.available_models["tempo_cnn"](audio_input)
-                                
-                                # If we get here, it worked
-                                logger.info("✅ Direct audio input successful!")
-                                
-                                # Process the result
-                                if hasattr(tempo_prediction, '__iter__') and not isinstance(tempo_prediction, str):
-                                    tempo_value = float(np.mean(tempo_prediction))
-                                else:
-                                    tempo_value = float(tempo_prediction)
-                                
-                                # Map to reasonable tempo range
-                                if tempo_value < 1:
-                                    tempo_value = tempo_value * 200 + 60  # Scale to 60-260 BPM
-                                elif tempo_value > 300:
-                                    tempo_value = tempo_value % 200 + 60  # Wrap to reasonable range
-                                
-                                return {
-                                    "ml_tempo": round(tempo_value, 1),
-                                    "ml_tempo_confidence": 0.7,
-                                    "ml_model": "essentia_deeptemp_k16_direct_audio",
-                                    "ml_tempo_method": "direct_audio_input",
-                                    "ml_preprocessing": "audio_normalization",
-                                    "melband_error_bypassed": True
-                                }
-                                
-                            except Exception as audio_error:
-                                logger.warning(f"⚠️ Audio format {fmt_idx+1} failed: {audio_error}")
-                                continue
-                        
-                        # If all audio formats failed, raise the original error
-                        raise mel_error
-                        
-                    except Exception as audio_fallback_error:
-                        logger.warning(f"⚠️ Audio fallback failed: {audio_fallback_error}")
-                        raise mel_error
+                    # If MelBands fails, skip this approach and go to fallback
+                    raise mel_error
                 
                 if len(mel_frames) > 0:
                     mel_spectrogram = np.array(mel_frames).T  # Shape: (80, time_frames)
@@ -556,7 +429,7 @@ class EssentiaModelManager:
                                     return {
                                         "ml_tempo": round(predicted_tempo, 1),
                                         "ml_tempo_confidence": round(confidence, 3),
-                                        "ml_model": "essentia_deeptemp_k16_cnn",
+                                        "ml_model": "essentia_deeptemp_k4_cnn",
                                         "ml_tempo_method": f"cnn_essentia_preprocessing_approach_{i+1}",
                                         "ml_input_shape": str(input_tensor.shape),
                                         "ml_preprocessing": "essentia_mel_spectrogram",

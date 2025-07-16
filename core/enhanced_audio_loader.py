@@ -144,7 +144,7 @@ class EnhancedAudioLoader:
         """Get the AudioFlux processor instance for visualization"""
         return self.audioflux_processor
     
-    def analyze_with_caching(self, file_content: bytes, filename: str) -> Dict[str, Any]:
+    def analyze_with_caching(self, file_content: bytes, filename: str, progress_callback=None) -> Dict[str, Any]:
         """
         Main analysis method with intelligent caching
         
@@ -177,7 +177,7 @@ class EnhancedAudioLoader:
         
         try:
             # Perform comprehensive analysis
-            analysis_result = self._perform_comprehensive_analysis(file_content, filename)
+            analysis_result = self._perform_comprehensive_analysis(file_content, filename, progress_callback)
             
             analysis_time = time.time() - start_analysis
             total_time = time.time() - start_total
@@ -227,7 +227,7 @@ class EnhancedAudioLoader:
             logger.error(f"❌ Analysis failed for {filename}: {e}")
             raise
     
-    def _perform_comprehensive_analysis(self, file_content: bytes, filename: str) -> Dict[str, Any]:
+    def _perform_comprehensive_analysis(self, file_content: bytes, filename: str, progress_callback=None) -> Dict[str, Any]:
         """
         CONTENT-AWARE Comprehensive analysis: Content detection → targeted analysis only on musical regions
         
@@ -243,11 +243,15 @@ class EnhancedAudioLoader:
         
         try:
             # Load audio with validation and GPU-optimized chunking
+            if progress_callback:
+                progress_callback("loading_audio", "Loading and optimizing audio...", 15)
             logger.info(f"🔍 Loading audio from temp file: {tmp_file_path}")
             y, sr, file_info = self._smart_audio_loading(tmp_file_path)
             logger.info(f"✅ Audio loaded successfully: {file_info.get('analyzed_duration', 0):.1f}s")
             
             # STEP 1: CONTENT-AWARE DETECTION (Foundation for all analysis)
+            if progress_callback:
+                progress_callback("content_detection", "Analyzing audio content regions...", 25)
             print("\n" + "="*60)
             print("🎯 CONTENT-AWARE ANALYSIS STARTING")
             print("="*60)
@@ -367,6 +371,8 @@ class EnhancedAudioLoader:
                 print(f"   ✅ Region {i+1} analysis complete")
             
             # PARALLEL ANALYSIS PIPELINE - Run all analyses on SOUND CONTENT ONLY (for backward compatibility)
+            if progress_callback:
+                progress_callback("ml_analysis", "Starting GPU ML analysis (key, tempo, danceability)...", 35)
             logger.info("🚀 Starting simplified parallel analysis pipeline...")
             
             # TODO: Replace this with region-based analysis only
@@ -380,6 +386,8 @@ class EnhancedAudioLoader:
                 logger.info("🚀 Submitting Essentia ML analysis task (sound content only)...")
                 future_ml = executor.submit(self._essentia_ml_analysis, sound_audio, sr)
                 
+                if progress_callback:
+                    progress_callback("rhythm_analysis", "Analyzing rhythm and downbeats with Madmom...", 50)
                 logger.info(f"🚀 Submitting simplified Madmom analysis...")
                 # For Madmom, we still need file-based approach but will filter results to sound regions
                 future_rhythm = executor.submit(self._madmom_content_aware_analysis, tmp_file_path, content_regions)
@@ -393,18 +401,26 @@ class EnhancedAudioLoader:
                 # Wait for all analyses to complete - optimized order
                 logger.info("⏳ Waiting for Essentia ML analysis (key/tempo/danceability)...")
                 ml_analysis = future_ml.result() 
+                if progress_callback:
+                    progress_callback("ml_complete", "✅ GPU ML analysis complete (key, tempo, danceability)", 65)
                 logger.info("✅ Essentia ML analysis completed")
                 
                 logger.info("⏳ Waiting for AudioFlux fast features (transients/mel)...")
                 audioflux_analysis = future_audioflux.result()
+                if progress_callback:
+                    progress_callback("audioflux_complete", "✅ AudioFlux feature extraction complete", 75)
                 logger.info("✅ AudioFlux fast feature extraction completed")
                 
                 logger.info("⏳ Waiting for Madmom downbeat analysis...")
                 rhythm_analysis = future_rhythm.result()
+                if progress_callback:
+                    progress_callback("rhythm_complete", f"✅ Madmom analysis complete - {len(rhythm_analysis.get('madmom_downbeat_times', []))} downbeats found", 85)
                 logger.info("✅ Madmom downbeat analysis completed")
                 
                 logger.info("⏳ Waiting for minimal librosa analysis (RMS energy only)...")
                 librosa_analysis = future_librosa.result()
+                if progress_callback:
+                    progress_callback("finalizing", "Finalizing analysis results...", 95)
                 logger.info("✅ Minimal librosa analysis completed")
             
             parallel_time = time.time() - parallel_start
@@ -513,8 +529,8 @@ class EnhancedAudioLoader:
             original_duration = info.duration
             original_sr = info.samplerate
             
-            # OPTIMIZED: Use larger frames + lower sample rate for 4x speed improvement
-            optimized_sample_rate = 8000  # Even lower for faster processing
+            # OPTIMIZED: Use proper sample rate for ML analysis (22050Hz minimum for music)
+            optimized_sample_rate = 22050  # Proper music analysis quality
             
             # Duration-based loading strategy
             if original_duration > self.max_duration:
@@ -533,7 +549,7 @@ class EnhancedAudioLoader:
                 "processing_sample_rate": int(sr),
                 "truncated": original_duration > self.max_duration,
                 "file_size_mb": round(os.path.getsize(file_path) / 1024 / 1024, 2),
-                "optimization": "8000Hz_large_frames_ultra_fast"
+                "optimization": "22050Hz_ml_quality_optimized"
             }
             
             logger.info(f"📊 Audio loaded: {analyzed_duration:.1f}s @ {sr}Hz (optimized)")
@@ -665,7 +681,9 @@ class EnhancedAudioLoader:
         if madmom_processor:
             logger.info(f"🥁 Starting fast Madmom rhythm analysis for file: {audio_file_path}")
             logger.info("🔄 Running downbeat and meter analysis...")
-            result = madmom_processor.analyze_downbeats_timeline(audio_file_path)
+            # Pass audio data directly to avoid file loading issues  
+            y, sr, _ = self._smart_audio_loading(audio_file_path)
+            result = madmom_processor.analyze_downbeats_timeline(audio_data=y, sr=sr)
             return result
         else:
             logger.warning("⚠️ Madmom processor not available - using fallback")
@@ -685,7 +703,9 @@ class EnhancedAudioLoader:
         logger.info(f"🎯 Starting content-aware Madmom analysis...")
         
         # Get full-file analysis first
-        full_result = madmom_processor.analyze_downbeats_timeline(audio_file_path)
+        # Pass audio data directly to avoid file loading issues
+        y, sr, _ = self._smart_audio_loading(audio_file_path)
+        full_result = madmom_processor.analyze_downbeats_timeline(audio_data=y, sr=sr)
         
         if "madmom_downbeat_times" not in full_result:
             logger.warning("⚠️ No downbeats detected in full analysis")
