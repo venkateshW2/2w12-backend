@@ -28,26 +28,17 @@
             overflow-x: hidden;
         }
         
-        /* Portfolio Specific Styles */
+        /* Clean Layout - No Sidebar */
         .layout {
-            display: flex;
             min-height: 100vh;
-        }
-        
-        .sidebar {
-            width: 200px;
-            background: var(--bg-color);
-            border-right: 1px solid var(--border-color);
-            padding: 2rem 1.5rem;
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
         }
         
         .main-content {
-            flex: 1;
-            margin-left: 200px;
-            padding: 2rem;
+            width: 100%;
+            padding: 0;
         }
         
         .logo h1 {
@@ -138,37 +129,20 @@
 </head>
 <body style="background: var(--bg-color); color: var(--text-primary);">
     <div class="layout">
-        <!-- Sidebar -->
-        <aside class="sidebar">
-            <div class="logo">
-                <h1>2W12</h1>
-                <div class="subtitle">Audio Analysis</div>
-            </div>
-            
-            <div style="margin-top: 2rem;">
-                <div style="margin-bottom: 1rem;">
-                    <h3 style="font-size: 0.875rem; font-weight: 500; color: var(--text-primary); margin-bottom: 0.5rem;">Features</h3>
-                    <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.8rem; color: var(--text-secondary);">
-                        <li style="margin-bottom: 0.25rem;">• Real-time Analysis</li>
-                        <li style="margin-bottom: 0.25rem;">• Content Detection</li>
-                        <li style="margin-bottom: 0.25rem;">• Timeline Visualization</li>
-                        <li style="margin-bottom: 0.25rem;">• Region Processing</li>
-                    </ul>
-                </div>
-            </div>
-        </aside>
-        
         <!-- Main Content -->
         <main class="main-content">
         
         <!-- Header -->
-        <header style="margin-bottom: 3rem;">
+        <header style="margin-bottom: 3rem; text-align: center;">
             <div style="margin-bottom: 2rem;">
-                <h1 style="font-size: 2.5rem; font-weight: 600; margin-bottom: 0.5rem; letter-spacing: -0.02em; color: var(--text-primary); font-family: 'Inter', sans-serif;">
-                    Audio Analysis Platform
+                <h1 class="glitch-text" data-text="2W12" style="font-size: 3rem; font-weight: 600; margin-bottom: 0.5rem; letter-spacing: -0.02em; color: var(--text-primary); font-family: 'Inter', sans-serif;">
+                    2W12
                 </h1>
-                <p style="font-size: 1rem; color: var(--text-secondary); font-family: 'Inter', sans-serif; font-weight: 300; max-width: 600px;">
-                    Professional audio analysis with machine learning-powered key detection, tempo analysis, and timeline visualization.
+                <p style="font-size: 1.1rem; color: var(--text-secondary); font-family: 'Inter', sans-serif; font-weight: 300; max-width: 600px; margin: 0 auto;">
+                    Audio Analysis Platform
+                </p>
+                <p style="font-size: 0.9rem; color: var(--text-muted); font-family: 'Inter', sans-serif; font-weight: 300; margin-top: 0.5rem;">
+                    ML-powered key detection • Real-time tempo analysis • Timeline visualization
                 </p>
             </div>
         </header>
@@ -586,7 +560,10 @@
                                 
                                 if (data.status === 'complete') {
                                     analysisComplete = true;
-                                    updateProgress(95, 'Getting visualization data...', 'finalizing');
+                                    // Show analysis results immediately
+                                    updateProgress(90, 'Analysis complete! Showing results...', 'complete');
+                                    showAnalysisResults(data.result);
+                                    updateProgress(95, 'Loading visualization...', 'visualization');
                                 } else if (data.status === 'error') {
                                     throw new Error(data.message);
                                 } else {
@@ -768,8 +745,40 @@
             processingIndicator.className = 'w-3 h-3 bg-green-500 rounded-full';
         }
 
+        function showAnalysisResults(analysisData) {
+            // Show key analysis results immediately (before visualization loads)
+            console.log('🚀 Showing analysis results immediately:', analysisData);
+            
+            const analysis = analysisData.analysis;
+            if (!analysis) return;
+            
+            // Show processing section is complete
+            document.getElementById('processingSection').classList.add('hidden');
+            document.getElementById('resultsSection').classList.remove('hidden');
+            
+            // Show key results immediately
+            updateTimeDisplay();
+            createMetrics(analysis);
+            
+            // Show basic info
+            const processingTime = analysis?.response_time || ((Date.now() - startTime) / 1000);
+            document.getElementById('tech-processtime').textContent = processingTime.toFixed(1) + 's';
+            
+            // Display a message that visualization is loading
+            const waveformCanvas = document.getElementById('waveformCanvas');
+            if (waveformCanvas) {
+                const ctx = waveformCanvas.getContext('2d');
+                ctx.fillStyle = '#f3f4f6';
+                ctx.fillRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+                ctx.fillStyle = '#6b7280';
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Loading visualization...', waveformCanvas.width/2, waveformCanvas.height/2);
+            }
+        }
+
         function updateProgress(percentage, message, step) {
-            // Update progress bar with portfolio styling
+            // Update progress bar with portfolio styling + elapsed time
             const progressBar = document.getElementById('progressBar');
             const progressPercent = document.getElementById('progressPercent');
             const processingStatus = document.getElementById('processingStatus');
@@ -781,7 +790,9 @@
                 progressPercent.textContent = Math.round(percentage) + '%';
             }
             if (processingStatus) {
-                processingStatus.innerHTML = `<p class="text-xs font-mono" style="color: var(--text-secondary); font-family: 'JetBrains Mono', monospace;">${message}</p>`;
+                // Add elapsed time to progress display
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                processingStatus.innerHTML = `<p class="text-xs font-mono" style="color: var(--text-secondary); font-family: 'JetBrains Mono', monospace;">${message} (${elapsed}s)</p>`;
             }
         }
 
