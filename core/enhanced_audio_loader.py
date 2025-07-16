@@ -543,6 +543,8 @@ class EnhancedAudioLoader:
             logger.error(f"❌ Audio loading failed: {e}")
             raise ValueError(f"Could not load audio file: {e}")
     
+    # REMOVED: _librosa_fallback_ml_analysis - using proper Essentia ML models instead
+    
     def _librosa_minimal_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
         """MINIMAL: Only essential RMS energy analysis (10x faster than full librosa)"""
         duration = len(y) / sr
@@ -750,13 +752,13 @@ class EnhancedAudioLoader:
     # Essentia ML analysis method:
 
     def _essentia_ml_analysis(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
-        """Essentia ML-powered analysis"""
+        """Essentia ML-powered analysis with librosa fallback"""
     
         if not self.essentia_models or not self.ml_models_loaded:
-            logger.info("🔄 Essentia models not available, skipping ML analysis")
+            logger.warning("⚠️ Essentia models not available - this should not happen after fixes")
             return {
-                    "ml_features_available": False,
-                    "ml_status": "models_not_loaded"
+                "ml_features_available": False,
+                "ml_status": "essentia_models_not_loaded"
             }
             
         logger.info("🤖 Starting Essentia ML analysis")

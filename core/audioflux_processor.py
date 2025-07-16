@@ -531,7 +531,7 @@ class AudioFluxProcessor:
         
         try:
             # Parallel feature extraction (all optimized with AudioFlux)
-            transient_features = self.extract_transients_fast(y)
+            transient_features = self.extract_onset_times(y)
             mel_features = self.extract_mel_coefficients_fast(y)
             spectral_features = self.extract_spectral_features_fast(y)
             

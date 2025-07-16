@@ -3,6 +3,9 @@ import os
 from pathlib import Path
 import logging
 import time
+
+# Note: TensorFlow GPU configuration moved to core/essentia_models.py to avoid conflicts
+
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse

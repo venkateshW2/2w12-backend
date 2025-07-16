@@ -4,8 +4,19 @@ import numpy as np
 import logging
 from typing import Dict, Any, Optional, List
 import os
+import tensorflow as tf
 
 logger = logging.getLogger(__name__)
+
+# Configure TensorFlow GPU memory growth BEFORE any model loading
+try:
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        logger.info(f"🚀 GPU memory growth enabled for {len(gpus)} GPU(s)")
+except Exception as e:
+    logger.warning(f"⚠️ GPU configuration failed: {e}")
 
 class EssentiaModelManager:
     """
@@ -77,6 +88,18 @@ class EssentiaModelManager:
                     logger.warning(f"⚠️ VGGish audio features model failed to load: {e}")
             else:
                 logger.info("⚠️ VGGish model temporarily disabled due to GraphDef errors")
+            
+            # Genre Classification Model (Discogs 400 classes)
+            if self._model_exists("genre_classification"):
+                try:
+                    self.available_models["genre_classification"] = es.TensorflowPredict(
+                        graphFilename=self.model_paths["genre_classification"],
+                        inputs=["model/Placeholder"],
+                        outputs=["model/Softmax"]
+                    )
+                    logger.info("✅ Genre classification model loaded")
+                except Exception as e:
+                    logger.warning(f"⚠️ Genre classification model failed to load: {e}")
                     
             # Danceability Model (using correct output node)
             if self._model_exists("danceability"):
@@ -326,22 +349,46 @@ class EssentiaModelManager:
                 # Method 1: Try with Essentia's own mel-spectrogram
                 windowing = es.Windowing(type='hann')
                 fft = es.FFT()
-                mel_bands = es.MelBands(numberBands=80, sampleRate=sr)
+                
+                # FIX: Calculate proper high frequency bound to avoid Nyquist error
+                nyquist_freq = sr / 2.0
+                # Use 95% of Nyquist frequency as safe upper bound
+                high_freq = min(11025, nyquist_freq * 0.95)  # Max 11kHz or 95% of Nyquist
+                
+                logger.info(f"🔧 MelBands config: sr={sr}, nyquist={nyquist_freq}, high_freq={high_freq}")
+                
+                mel_bands = es.MelBands(
+                    numberBands=80, 
+                    sampleRate=sr,
+                    lowFrequencyBound=0,
+                    highFrequencyBound=high_freq
+                )
                 
                 # Process in smaller chunks to avoid memory issues
                 chunk_size = min(len(y), sr * 10)  # Max 10 seconds at a time
                 audio_chunk = y[:chunk_size].astype(np.float32)
                 
-                # Create mel spectrogram using Essentia
+                # Create mel spectrogram using Essentia with error handling
                 mel_frames = []
                 hop_size = 512
-                for i in range(0, len(audio_chunk) - 1024, hop_size):
-                    frame = audio_chunk[i:i+1024]
-                    if len(frame) == 1024:
-                        windowed = windowing(frame)
-                        fft_result = fft(windowed)
-                        mel_frame = mel_bands(fft_result)
-                        mel_frames.append(mel_frame)
+                
+                try:
+                    for i in range(0, len(audio_chunk) - 1024, hop_size):
+                        frame = audio_chunk[i:i+1024]
+                        if len(frame) == 1024:
+                            windowed = windowing(frame)
+                            fft_result = fft(windowed)
+                            mel_frame = mel_bands(fft_result)
+                            mel_frames.append(mel_frame)
+                            
+                            # Process only first 100 frames for speed
+                            if len(mel_frames) >= 100:
+                                break
+                                
+                except Exception as mel_error:
+                    logger.warning(f"⚠️ MelBands processing failed: {mel_error}")
+                    # If MelBands fails, skip this approach and go to fallback
+                    raise mel_error
                 
                 if len(mel_frames) > 0:
                     mel_spectrogram = np.array(mel_frames).T  # Shape: (80, time_frames)
