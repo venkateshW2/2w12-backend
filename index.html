@@ -5,33 +5,128 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>2W12 Audio Analysis</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --bg-color: #fafafa;
+            --text-primary: #1a1a1a;
+            --text-secondary: #8e8e8e;
+            --text-muted: #999;
+            --border-color: #e1e1e1;
+            --accent-color: #777777;
+            --hover-bg: #f5f5f5;
+            --card-bg: #eeeeee;
+            --glitch-color: #ff0080;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            font-weight: 300;
+            letter-spacing: -0.01em;
+            overflow-x: hidden;
+        }
+        
+        /* Portfolio Specific Styles */
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        .sidebar {
+            width: 200px;
+            background: var(--bg-color);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        
+        .main-content {
+            flex: 1;
+            margin-left: 200px;
+            padding: 2rem;
+        }
+        
+        .logo h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            letter-spacing: -0.02em;
+        }
+        
+        .subtitle {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 300;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+        
+        .glitch-text {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .glitch-text::before,
+        .glitch-text::after {
+            content: attr(data-text);
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-color);
+        }
+        
+        .glitch-text::before {
+            left: 2px;
+            text-shadow: -2px 0 var(--glitch-color);
+            clip: rect(24px, 550px, 90px, 0);
+            animation: glitch-anim-1 3s infinite linear alternate-reverse;
+        }
+        
+        .glitch-text::after {
+            left: -2px;
+            text-shadow: -2px 0 var(--accent-color);
+            clip: rect(85px, 550px, 140px, 0);
+            animation: glitch-anim-2 2s infinite linear alternate-reverse;
+        }
+        
+        @keyframes glitch-anim-1 {
+            0% { clip: rect(64px, 9999px, 90px, 0); }
+            5% { clip: rect(30px, 9999px, 90px, 0); }
+            10% { clip: rect(74px, 9999px, 90px, 0); }
+            100% { clip: rect(64px, 9999px, 90px, 0); }
+        }
+        
+        @keyframes glitch-anim-2 {
+            0% { clip: rect(85px, 9999px, 140px, 0); }
+            5% { clip: rect(95px, 9999px, 140px, 0); }
+            10% { clip: rect(100px, 9999px, 140px, 0); }
+            100% { clip: rect(85px, 9999px, 140px, 0); }
+        }
+    </style>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     fontFamily: {
                         'sans': ['Inter', 'system-ui', 'sans-serif'],
-                        'mono': ['JetBrains Mono', 'Menlo', 'Monaco', 'monospace']
+                        'mono': ['JetBrains Mono', 'IBM Plex Mono', 'monospace']
                     },
                     animation: {
                         'fade-in': 'fadeIn 0.5s ease-in-out',
                         'slide-up': 'slideUp 0.4s ease-out',
                         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
                         'progress': 'progress 0.3s ease-out',
-                        'glitch': 'glitch 2s infinite linear alternate-reverse',
                     },
                     keyframes: {
                         fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
                         slideUp: { '0%': { transform: 'translateY(20px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
-                        progress: { '0%': { transform: 'scaleX(0)' }, '100%': { transform: 'scaleX(1)' } },
-                        glitch: {
-                            '0%': { transform: 'translate(0)' },
-                            '20%': { transform: 'translate(-2px, 2px)' },
-                            '40%': { transform: 'translate(-2px, -2px)' },
-                            '60%': { transform: 'translate(2px, 2px)' },
-                            '80%': { transform: 'translate(2px, -2px)' },
-                            '100%': { transform: 'translate(0)' }
-                        }
+                        progress: { '0%': { transform: 'scaleX(0)' }, '100%': { transform: 'scaleX(1)' } }
                     }
                 }
             }
@@ -39,20 +134,43 @@
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 </head>
-<body class="bg-gray-50 text-gray-900 font-sans min-h-screen">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<body style="background: var(--bg-color); color: var(--text-primary);">
+    <div class="layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <h1>2W12</h1>
+                <div class="subtitle">Audio Analysis</div>
+            </div>
+            
+            <div style="margin-top: 2rem;">
+                <div style="margin-bottom: 1rem;">
+                    <h3 style="font-size: 0.875rem; font-weight: 500; color: var(--text-primary); margin-bottom: 0.5rem;">Features</h3>
+                    <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.8rem; color: var(--text-secondary);">
+                        <li style="margin-bottom: 0.25rem;">• Real-time Analysis</li>
+                        <li style="margin-bottom: 0.25rem;">• Content Detection</li>
+                        <li style="margin-bottom: 0.25rem;">• Timeline Visualization</li>
+                        <li style="margin-bottom: 0.25rem;">• Region Processing</li>
+                    </ul>
+                </div>
+            </div>
+        </aside>
+        
+        <!-- Main Content -->
+        <main class="main-content">
         
         <!-- Header -->
-        <header class="text-center mb-12 animate-fade-in">
-            <h1 class="text-4xl lg:text-5xl font-bold text-gray-900 mb-4 tracking-tight relative">
-                <span class="relative z-10">2W12 Audio Analysis</span>
-                <span class="absolute top-0 left-0 w-full h-full text-blue-600 opacity-20 animate-glitch" style="clip-path: polygon(0 0, 100% 0, 100% 45%, 0 45%);">2W12 Audio Analysis</span>
-            </h1>
-            <p class="text-xl text-gray-600 font-light max-w-2xl mx-auto leading-relaxed">
-                Professional audio analysis with real-time waveform visualization and precise downbeat detection
-            </p>
+        <header style="margin-bottom: 3rem;">
+            <div style="margin-bottom: 2rem;">
+                <h1 style="font-size: 2.5rem; font-weight: 600; margin-bottom: 0.5rem; letter-spacing: -0.02em; color: var(--text-primary); font-family: 'Inter', sans-serif;">
+                    Audio Analysis Platform
+                </h1>
+                <p style="font-size: 1rem; color: var(--text-secondary); font-family: 'Inter', sans-serif; font-weight: 300; max-width: 600px;">
+                    Professional audio analysis with machine learning-powered key detection, tempo analysis, and timeline visualization.
+                </p>
+            </div>
         </header>
 
         <!-- Compact Upload Area -->
@@ -99,13 +217,13 @@
         <div id="processingSection" class="mb-12 hidden">
             <div class="bg-white rounded-2xl shadow-lg p-8 animate-slide-up">
                 <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-2xl font-semibold text-gray-900">Processing Audio</h2>
+                    <h2 id="processingTitle" class="text-2xl font-semibold text-gray-900">Processing Audio</h2>
                     <div class="flex items-center space-x-4">
-                        <div class="animate-pulse-slow">
+                        <div id="processingIndicator" class="animate-pulse-slow">
                             <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
                         </div>
                         <span id="processingTime" class="text-sm font-mono text-gray-600">0.0s</span>
-                        <span id="uploadProgress" class="text-sm text-blue-600 hidden">Uploading...</span>
+                        <span id="currentStage" class="text-sm text-gray-600">Starting...</span>
                     </div>
                 </div>
                 
@@ -121,44 +239,9 @@
                 </div>
                 
                 <!-- Status -->
-                <div id="processingStatus" class="bg-gray-50 rounded-xl p-4 text-center">
-                    <p class="text-gray-600">Initializing analysis...</p>
-                </div>
-                
-                <!-- Processing Steps -->
-                <div class="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div id="step-upload" class="processing-step opacity-50">
-                        <div class="text-center">
-                            <div class="w-12 h-12 mx-auto mb-2 bg-gray-100 rounded-full flex items-center justify-center">
-                                <div class="w-6 h-6 border-2 border-gray-300 rounded-full"></div>
-                            </div>
-                            <p class="text-xs font-medium text-gray-600">Upload</p>
-                        </div>
-                    </div>
-                    <div id="step-analysis" class="processing-step opacity-50">
-                        <div class="text-center">
-                            <div class="w-12 h-12 mx-auto mb-2 bg-gray-100 rounded-full flex items-center justify-center">
-                                <div class="w-6 h-6 border-2 border-gray-300 rounded-full"></div>
-                            </div>
-                            <p class="text-xs font-medium text-gray-600">AudioFlux</p>
-                        </div>
-                    </div>
-                    <div id="step-downbeats" class="processing-step opacity-50">
-                        <div class="text-center">
-                            <div class="w-12 h-12 mx-auto mb-2 bg-gray-100 rounded-full flex items-center justify-center">
-                                <div class="w-6 h-6 border-2 border-gray-300 rounded-full"></div>
-                            </div>
-                            <p class="text-xs font-medium text-gray-600">Downbeats</p>
-                        </div>
-                    </div>
-                    <div id="step-complete" class="processing-step opacity-50">
-                        <div class="text-center">
-                            <div class="w-12 h-12 mx-auto mb-2 bg-gray-100 rounded-full flex items-center justify-center">
-                                <div class="w-6 h-6 border-2 border-gray-300 rounded-full"></div>
-                            </div>
-                            <p class="text-xs font-medium text-gray-600">Complete</p>
-                        </div>
-                    </div>
+                <!-- Real Status -->
+                <div id="processingStatus" class="p-3 text-left" style="background: var(--hover-bg); border-radius: 8px;">
+                    <p class="text-xs font-mono" style="color: var(--text-secondary); font-family: 'JetBrains Mono', monospace;">Initializing...</p>
                 </div>
             </div>
         </div>
@@ -190,7 +273,7 @@
                 </div>
                 <div class="p-6">
                     <div class="relative">
-                        <canvas id="waveformCanvas" class="w-full bg-gray-50 rounded-xl border border-gray-200 cursor-crosshair" style="height: 180px;"></canvas>
+                        <canvas id="waveformCanvas" class="w-full bg-gray-50 rounded-xl border border-gray-200 cursor-crosshair" style="height: 100px;"></canvas>
                         <div id="waveformControls" class="mt-4 flex items-center justify-between">
                             <div class="flex items-center space-x-6 text-sm text-gray-600">
                                 <span id="currentTime" class="font-mono">00:00</span>
@@ -269,7 +352,22 @@
                 </div>
             </div>
         </div>
+        </main>
     </div>
+
+    <!-- Footer -->
+    <footer class="mt-16 border-t border-gray-200 pt-8 pb-6">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row items-center justify-between">
+                <div class="flex items-center space-x-6 mb-4 md:mb-0">
+                    <a href="mailto:hello@2w12.one" class="text-gray-600 hover:text-gray-900 transition-colors duration-200">Email</a>
+                    <a href="#" class="text-gray-600 hover:text-gray-900 transition-colors duration-200">About</a>
+                    <a href="#" class="text-gray-600 hover:text-gray-900 transition-colors duration-200">API</a>
+                </div>
+                <p class="text-gray-500 text-sm font-mono">© 2025 2W12 • Audio Analysis Platform • Real-time Processing</p>
+            </div>
+        </div>
+    </footer>
 
     <script>
         // Global variables
@@ -459,7 +557,7 @@
                 // Update progress
                 updateProgress(10, 'Uploading file...', 'upload');
                 
-                // Make API request with upload progress tracking
+                // Use the working visualization endpoint that had GPU/CUDA working
                 const response = await fetch('/api/audio/analyze-visualization', {
                     method: 'POST',
                     body: formData
@@ -474,13 +572,13 @@
                     updateProgress(25, `Uploading ${(uploadSize/1024/1024).toFixed(0)}MB file...`, 'upload');
                 }
                 
-                updateProgress(40, 'AudioFlux processing...', 'analysis');
+                updateProgress(40, 'ML analysis: key detection, tempo...', 'analysis');
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
                 
-                updateProgress(70, 'Extracting downbeats...', 'downbeats');
+                updateProgress(70, 'Processing downbeats and timeline...', 'downbeats');
                 
                 const result = await response.json();
                 
@@ -565,23 +663,54 @@
         }
 
         function startProcessingTimer() {
-            const uploadProgress = document.getElementById('uploadProgress');
-            const analysisStage = document.getElementById('analysisStage');
+            const currentStage = document.getElementById('currentStage');
+            const processingTitle = document.getElementById('processingTitle');
+            const processingIndicator = document.getElementById('processingIndicator');
             
-            // Show upload progress initially
-            uploadProgress.classList.remove('hidden');
-            analysisStage.classList.add('hidden');
+            // Show upload stage initially
+            currentStage.textContent = 'Starting...';
+            currentStage.className = 'text-sm';
+            currentStage.style.color = 'var(--text-secondary)';
+            processingTitle.textContent = 'Processing Audio';
+            processingIndicator.className = 'animate-pulse-slow';
             
             processingTimer = setInterval(() => {
                 const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                 document.getElementById('processingTime').textContent = elapsed + 's';
-                
-                // Switch to analysis stage after 30 seconds (indicating upload likely complete)
-                if (elapsed > 30) {
-                    uploadProgress.classList.add('hidden');
-                    analysisStage.classList.remove('hidden');
-                }
             }, 100);
+        }
+        
+        function updateRealProgress(stage, progress, message) {
+            const currentStage = document.getElementById('currentStage');
+            const processingTitle = document.getElementById('processingTitle');
+            const processingIndicator = document.getElementById('processingIndicator');
+            
+            console.log(`🔄 Real progress update: ${stage} - ${progress}% - ${message}`);
+            
+            // Update stage indicator
+            currentStage.textContent = stage;
+            currentStage.style.color = 'var(--text-secondary)';
+            
+            // Update title based on stage with better mapping
+            if (stage.includes('Upload') || stage.includes('upload')) {
+                processingTitle.textContent = 'Uploading Audio';
+                processingIndicator.innerHTML = '<div class="w-3 h-3 bg-blue-500 rounded-full animate-pulse-slow"></div>';
+            } else if (stage.includes('Loading') || stage.includes('loading')) {
+                processingTitle.textContent = 'Loading Audio';
+                processingIndicator.innerHTML = '<div class="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>';
+            } else if (stage.includes('Audio Analysis') || stage.includes('analyzing') || stage.includes('Analysis')) {
+                processingTitle.textContent = 'Content-Aware Analysis';
+                processingIndicator.innerHTML = '<div class="w-3 h-3 bg-green-500 rounded-full animate-spin"></div>';
+            } else if (stage.includes('Complete') || stage.includes('complete')) {
+                processingTitle.textContent = 'Analysis Complete';
+                processingIndicator.innerHTML = '<div class="w-3 h-3 bg-green-500 rounded-full"></div>';
+            } else {
+                processingTitle.textContent = 'Processing Audio';
+                processingIndicator.innerHTML = '<div class="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>';
+            }
+            
+            // Update progress bar and status with real data
+            updateProgress(progress, message, null);
         }
 
         function stopProcessingTimer() {
@@ -590,36 +719,36 @@
                 processingTimer = null;
             }
             
-            // Hide progress indicators
-            document.getElementById('uploadProgress').classList.add('hidden');
-            document.getElementById('analysisStage').classList.add('hidden');
+            // Final progress update
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            updateProgress(100, `Analysis complete! (${elapsed}s)`, 'complete');
+            
+            // Update to completed state
+            const currentStage = document.getElementById('currentStage');
+            const processingTitle = document.getElementById('processingTitle');
+            const processingIndicator = document.getElementById('processingIndicator');
+            
+            currentStage.textContent = `Complete (${elapsed}s)`;
+            currentStage.className = 'text-sm text-green-600';
+            processingTitle.textContent = 'Analysis Complete';
+            processingIndicator.className = 'w-3 h-3 bg-green-500 rounded-full';
         }
 
         function updateProgress(percentage, message, step) {
-            // Update progress bar
-            document.getElementById('progressBar').style.width = percentage + '%';
-            document.getElementById('progressPercent').textContent = percentage + '%';
-            document.getElementById('processingStatus').innerHTML = `<p class="text-gray-600">${message}</p>`;
+            // Update progress bar with portfolio styling
+            const progressBar = document.getElementById('progressBar');
+            const progressPercent = document.getElementById('progressPercent');
+            const processingStatus = document.getElementById('processingStatus');
             
-            // Update step indicators
-            const steps = ['upload', 'analysis', 'downbeats', 'complete'];
-            const currentStepIndex = steps.indexOf(step);
-            
-            steps.forEach((stepName, index) => {
-                const stepElement = document.getElementById(`step-${stepName}`);
-                const circle = stepElement.querySelector('.w-6.h-6');
-                
-                if (index <= currentStepIndex) {
-                    stepElement.classList.remove('opacity-50');
-                    stepElement.classList.add('opacity-100');
-                    circle.classList.remove('border-gray-300');
-                    circle.classList.add('border-blue-500', 'bg-blue-500');
-                } else {
-                    stepElement.classList.add('opacity-50');
-                    circle.classList.remove('border-blue-500', 'bg-blue-500');
-                    circle.classList.add('border-gray-300');
-                }
-            });
+            if (progressBar) {
+                progressBar.style.width = Math.round(percentage) + '%';
+            }
+            if (progressPercent) {
+                progressPercent.textContent = Math.round(percentage) + '%';
+            }
+            if (processingStatus) {
+                processingStatus.innerHTML = `<p class="text-xs font-mono" style="color: var(--text-secondary); font-family: 'JetBrains Mono', monospace;">${message}</p>`;
+            }
         }
 
         function loadResults(result) {
@@ -630,20 +759,20 @@
             document.getElementById('processingSection').classList.add('hidden');
             document.getElementById('resultsSection').classList.remove('hidden');
             
-            // Calculate and display performance
-            const processingTime = analysis.response_time || ((Date.now() - startTime) / 1000);
-            const audioDuration = visualization.waveform.duration;
+            // Calculate and display performance with defensive checks
+            const processingTime = analysis?.response_time || ((Date.now() - startTime) / 1000);
+            const audioDuration = visualization?.waveform?.duration || 0;
             const realtimeFactor = audioDuration > 0 ? (audioDuration / processingTime).toFixed(1) : '0.0';
             
             document.getElementById('realtimeValue').textContent = realtimeFactor + 'x';
             document.getElementById('tech-processtime').textContent = processingTime.toFixed(1) + 's';
             
-            // Load waveform data
-            waveformData = visualization.waveform;
-            downbeats = visualization.downbeats.times || [];
-            chords = visualization.chords?.events || [];
+            // Load waveform data with defensive checks
+            waveformData = visualization?.waveform || {};
+            downbeats = visualization?.downbeats?.times || [];
+            chords = visualization?.chords?.events || [];
             contentRegions = result.analysis?.content_analysis?.regions || [];
-            duration = waveformData.duration;
+            duration = waveformData?.duration || 0;
             currentTime = 0;
             
             // Debug logging
@@ -691,18 +820,31 @@
                 'B major': '1B', 'B minor': '10A'
             };
             
-            const fullKey = analysis.ml_full_key || `${analysis.ml_key || ''} ${analysis.ml_mode || ''}`.trim();
+            // Debug: Log the full analysis object to see what's available
+            console.log('🔍 Full analysis object:', analysis);
+            
+            // Check for ML analysis results in different locations
+            const mlKey = analysis.ml_key || analysis.key || analysis.enhanced_key || 'Unknown';
+            const mlMode = analysis.ml_mode || analysis.mode || analysis.enhanced_mode || 'Unknown';
+            const mlTempo = analysis.ml_tempo || analysis.tempo || analysis.enhanced_tempo || 'Unknown';
+            const mlDanceability = analysis.ml_danceability || analysis.danceability || 0;
+            const downbeatCount = analysis.madmom_downbeat_count || analysis.downbeat_count || 0;
+            const energy = analysis.rms_energy || analysis.energy || 0;
+            
+            console.log('🎹 Key detection results:', { mlKey, mlMode, mlTempo, mlDanceability });
+            
+            const fullKey = mlKey !== 'Unknown' && mlMode !== 'Unknown' ? `${mlKey} ${mlMode}` : 'Unknown';
             const camelotKey = keyToCamelot[fullKey] || 'N/A';
             
             const metrics = [
-                { label: 'Key', value: analysis.ml_key || analysis.key || 'N/A' },
-                { label: 'Scale', value: analysis.ml_mode || 'N/A' },
+                { label: 'Key', value: mlKey },
+                { label: 'Scale', value: mlMode },
                 { label: 'Camelot', value: camelotKey },
-                { label: 'Tempo', value: analysis.ml_tempo || analysis.tempo || 'N/A' },
-                { label: 'Danceability', value: analysis.ml_danceability ? `${(analysis.ml_danceability * 100).toFixed(0)}%` : 'N/A' },
-                { label: 'Time Signature', value: analysis.madmom_meter_detection || 'N/A' },
-                { label: 'Downbeats', value: analysis.madmom_downbeat_count || 'N/A' },
-                { label: 'Energy', value: analysis.rms_energy ? analysis.rms_energy.toFixed(2) : 'N/A' }
+                { label: 'Tempo', value: typeof mlTempo === 'number' ? `${Math.round(mlTempo)} BPM` : mlTempo },
+                { label: 'Danceability', value: mlDanceability > 0 ? `${Math.round(mlDanceability * 100)}%` : 'N/A' },
+                { label: 'Time Signature', value: analysis.madmom_meter_detection || '4/4' },
+                { label: 'Downbeats', value: downbeatCount > 0 ? downbeatCount : 'None detected' },
+                { label: 'Energy', value: energy > 0 ? energy.toFixed(2) : 'N/A' }
             ];
             
             const grid = document.getElementById('metricsGrid');
@@ -962,66 +1104,155 @@
             // Update active region card
             const activeRegionCard = document.getElementById('activeRegionCard');
             activeRegionCard.innerHTML = `
-                <div class="mb-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <h4 class="text-2xl font-semibold text-gray-900">R.${regionInfo.region_number}</h4>
-                        <span class="text-sm text-gray-500 font-mono bg-gray-100 px-3 py-1 rounded">
+                <div class="mb-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-xl font-semibold" style="color: var(--text-primary); font-family: 'Inter', sans-serif;">R.${regionInfo.region_number}</h4>
+                        <span class="text-xs font-mono px-2 py-1 rounded" style="color: var(--text-muted); background: var(--hover-bg); font-family: 'JetBrains Mono', monospace;">
                             ${regionInfo.content_type.toUpperCase()}
                         </span>
                     </div>
                     
-                    <div class="bg-gray-50 rounded-lg p-4 mb-6">
-                        <div class="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                                <span class="text-gray-600">Start Time:</span>
-                                <span class="font-mono ml-2">${formatTime(regionInfo.start_time)}</span>
-                            </div>
-                            <div>
-                                <span class="text-gray-600">End Time:</span>
-                                <span class="font-mono ml-2">${formatTime(regionInfo.end_time)}</span>
-                            </div>
-                            <div>
-                                <span class="text-gray-600">Duration:</span>
-                                <span class="font-mono ml-2">${regionInfo.duration.toFixed(1)}s</span>
-                            </div>
+                    <!-- Region Waveform -->
+                    <div class="mb-4" style="background: var(--hover-bg); border-radius: 8px; padding: 12px;">
+                        <div class="flex items-center justify-between text-xs mb-2" style="color: var(--text-secondary); font-family: 'JetBrains Mono', monospace;">
+                            <span>${formatTime(regionInfo.start_time)} - ${formatTime(regionInfo.end_time)}</span>
+                            <span>${regionInfo.duration.toFixed(1)}s</span>
                         </div>
+                        <canvas id="regionWaveform${index}" width="400" height="60" style="width: 100%; height: 60px; background: var(--bg-color); border-radius: 4px; border: 1px solid var(--border-color);"></canvas>
                     </div>
                 </div>
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                     ${keyInfo.key ? `
-                        <div class="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                            <div class="text-sm text-purple-600 mb-1">Key Detection</div>
-                            <div class="text-2xl font-bold text-purple-800">${keyInfo.key}</div>
-                            <div class="text-xs text-purple-600 mt-1">Confidence: ${(keyInfo.confidence * 100).toFixed(0)}%</div>
+                        <div class="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                            <div class="text-xs text-purple-600 mb-1">Key</div>
+                            <div class="text-lg font-bold text-purple-800">${keyInfo.key}</div>
+                            <div class="text-xs text-purple-600">${(keyInfo.confidence * 100).toFixed(0)}%</div>
                         </div>
                     ` : ''}
                     
                     ${tempoInfo.tempo ? `
-                        <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                            <div class="text-sm text-blue-600 mb-1">Tempo</div>
-                            <div class="text-2xl font-bold text-blue-800">${tempoInfo.tempo.toFixed(0)} <span class="text-sm font-normal">BPM</span></div>
-                            <div class="text-xs text-blue-600 mt-1">Confidence: ${(tempoInfo.confidence * 100).toFixed(0)}%</div>
+                        <div class="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                            <div class="text-xs text-blue-600 mb-1">Tempo</div>
+                            <div class="text-lg font-bold text-blue-800">${tempoInfo.tempo.toFixed(0)} <span class="text-xs font-normal">BPM</span></div>
+                            <div class="text-xs text-blue-600">${(tempoInfo.confidence * 100).toFixed(0)}%</div>
                         </div>
                     ` : ''}
                     
                     ${downbeatInfo.downbeat_count !== undefined ? `
-                        <div class="bg-green-50 rounded-lg p-4 border border-green-200">
-                            <div class="text-sm text-green-600 mb-1">Downbeats</div>
-                            <div class="text-2xl font-bold text-green-800">${downbeatInfo.downbeat_count}</div>
-                            <div class="text-xs text-green-600 mt-1">Beat markers detected</div>
+                        <div class="bg-green-50 rounded-lg p-3 border border-green-200">
+                            <div class="text-xs text-green-600 mb-1">Downbeats</div>
+                            <div class="text-lg font-bold text-green-800">${downbeatInfo.downbeat_count}</div>
+                            <div class="text-xs text-green-600">detected</div>
                         </div>
                     ` : ''}
                     
                     ${danceInfo.score !== undefined ? `
-                        <div class="bg-orange-50 rounded-lg p-4 border border-orange-200">
-                            <div class="text-sm text-orange-600 mb-1">Danceability</div>
-                            <div class="text-2xl font-bold text-orange-800">${(danceInfo.score * 100).toFixed(0)}%</div>
-                            <div class="text-xs text-orange-600 mt-1">Dance potential</div>
+                        <div class="bg-orange-50 rounded-lg p-3 border border-orange-200">
+                            <div class="text-xs text-orange-600 mb-1">Dance</div>
+                            <div class="text-lg font-bold text-orange-800">${(danceInfo.score * 100).toFixed(0)}%</div>
+                            <div class="text-xs text-orange-600">potential</div>
                         </div>
                     ` : ''}
                 </div>
             `;
+            
+            // Render region-specific waveform
+            setTimeout(() => renderRegionWaveform(index, regionInfo), 100);
+        }
+        
+        let regionWaveformCache = {};
+        
+        function renderRegionWaveform(regionIndex, regionInfo) {
+            const canvasId = `regionWaveform${regionIndex}`;
+            const canvas = document.getElementById(canvasId);
+            
+            if (!canvas || !waveformData) {
+                console.log('❌ Canvas or waveform data not available for region', regionIndex);
+                return;
+            }
+            
+            // Check cache first
+            if (regionWaveformCache[regionIndex]) {
+                console.log('✅ Using cached waveform for region', regionIndex);
+                const ctx = canvas.getContext('2d');
+                ctx.putImageData(regionWaveformCache[regionIndex], 0, 0);
+                return;
+            }
+            
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            // Clear canvas with portfolio background
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-color') || '#fafafa';
+            ctx.fillRect(0, 0, width, height);
+            
+            // Extract region-specific waveform data
+            const startTime = regionInfo.start_time;
+            const endTime = regionInfo.end_time;
+            const duration = endTime - startTime;
+            
+            // Calculate sample indices for this region
+            const waveformPeaks = waveformData.peaks || waveformData.data || [];
+            const totalSamples = waveformPeaks.length;
+            const totalDuration = waveformData.duration;
+            const startIndex = Math.floor((startTime / totalDuration) * totalSamples);
+            const endIndex = Math.floor((endTime / totalDuration) * totalSamples);
+            const regionSamples = waveformPeaks.slice(startIndex, endIndex);
+            
+            if (regionSamples.length === 0) {
+                console.log('❌ No waveform data for region', regionIndex);
+                return;
+            }
+            
+            // Render waveform
+            ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent-color') || '#777777';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            
+            const samplesPerPixel = Math.max(1, Math.floor(regionSamples.length / width));
+            
+            for (let x = 0; x < width; x++) {
+                const sampleIndex = Math.floor(x * samplesPerPixel);
+                if (sampleIndex < regionSamples.length) {
+                    const amplitude = regionSamples[sampleIndex];
+                    const y = height / 2 - (amplitude * height / 4); // Only show positive half
+                    
+                    if (x === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+            }
+            ctx.stroke();
+            
+            // Add downbeat markers for this region
+            if (downbeats && downbeats.length > 0) {
+                ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-muted') || '#999';
+                ctx.lineWidth = 1;
+                ctx.globalAlpha = 0.6;
+                
+                downbeats.forEach(beatTime => {
+                    if (beatTime >= startTime && beatTime <= endTime) {
+                        const relativeTime = beatTime - startTime;
+                        const x = (relativeTime / duration) * width;
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(x, 5);
+                        ctx.lineTo(x, height - 5);
+                        ctx.stroke();
+                    }
+                });
+                
+                ctx.globalAlpha = 1.0;
+            }
+            
+            // Cache the rendered waveform
+            regionWaveformCache[regionIndex] = ctx.getImageData(0, 0, width, height);
+            console.log('✅ Rendered and cached waveform for region', regionIndex, `(${startTime.toFixed(1)}s - ${endTime.toFixed(1)}s)`);
         }
     </script>
 </body>
