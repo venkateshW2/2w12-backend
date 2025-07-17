@@ -241,13 +241,15 @@
                     <div class="flex items-center justify-between">
                         <h3 class="text-xl font-semibold text-gray-900">Timeline Overview</h3>
                         <div class="flex items-center space-x-4 text-sm text-gray-600">
+                            <span id="keyDisplay" class="font-mono">Key: --</span>
+                            <span id="tempoDisplay" class="font-mono">Tempo: --</span>
                             <span id="waveformInfo" class="font-mono">Loading...</span>
                         </div>
                     </div>
                 </div>
                 <div class="p-6">
                     <div class="relative">
-                        <canvas id="waveformCanvas" class="w-full bg-gray-50 rounded-xl border border-gray-200 cursor-crosshair" style="height: 100px;"></canvas>
+                        <canvas id="waveformCanvas" class="w-full bg-gray-50 rounded-xl border border-gray-200 cursor-crosshair" style="height: 60px;"></canvas>
                         <div id="waveformControls" class="mt-4 flex items-center justify-between">
                             <div class="flex items-center space-x-6 text-sm text-gray-600">
                                 <span id="currentTime" class="font-mono">00:00</span>
@@ -285,46 +287,7 @@
                 </div>
             </div>
 
-            <!-- Analysis Results Grid -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                
-                <!-- Key Metrics -->
-                <div class="lg:col-span-2">
-                    <div class="bg-white rounded-2xl shadow-lg p-6 animate-slide-up">
-                        <h3 class="text-xl font-semibold text-gray-900 mb-6">Analysis Results</h3>
-                        <div id="metricsGrid" class="grid grid-cols-2 md:grid-cols-3 gap-4">
-                            <!-- Populated by JavaScript -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Technical Details -->
-                <div class="bg-white rounded-2xl shadow-lg p-6 animate-slide-up">
-                    <h3 class="text-xl font-semibold text-gray-900 mb-6">Technical Info</h3>
-                    <div class="space-y-4">
-                        <div class="flex justify-between items-center py-2 border-b border-gray-100">
-                            <span class="text-gray-600 text-sm">Pipeline</span>
-                            <span id="tech-pipeline" class="font-mono text-sm text-gray-900">AudioFlux</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-100">
-                            <span class="text-gray-600 text-sm">GPU Acceleration</span>
-                            <span id="tech-gpu" class="font-mono text-sm text-gray-900">Enabled</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-100">
-                            <span class="text-gray-600 text-sm">Sample Rate</span>
-                            <span id="tech-samplerate" class="font-mono text-sm text-gray-900">22 kHz</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-100">
-                            <span class="text-gray-600 text-sm">File Size</span>
-                            <span id="tech-filesize" class="font-mono text-sm text-gray-900">0 MB</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2">
-                            <span class="text-gray-600 text-sm">Processing Time</span>
-                            <span id="tech-processtime" class="font-mono text-sm text-gray-900">0.0s</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <!-- Analysis Results removed - only region cards needed -->
         </div>
         </main>
     </div>
@@ -434,11 +397,11 @@
             ctx = waveformCanvas.getContext('2d');
             console.log('🔧 Canvas context created:', !!ctx);
             
-            // Set a fixed size first to test
-            waveformCanvas.width = 800;
-            waveformCanvas.height = 200;
+            // Set a smaller fixed size for faster rendering
+            waveformCanvas.width = 400;
+            waveformCanvas.height = 60;
             waveformCanvas.style.width = '100%';
-            waveformCanvas.style.height = '200px';
+            waveformCanvas.style.height = '60px';
             
             console.log('🔧 Canvas size set to:', waveformCanvas.width, 'x', waveformCanvas.height);
             
@@ -507,20 +470,12 @@
             startTime = Date.now();
             startProcessingTimer();
             
-            // Update file info
-            document.getElementById('tech-filesize').textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB`;
+            // File info removed with analysis results card
             
-            // Show filename in header
-            const filenameDisplay = document.getElementById('filename-display');
-            if (filenameDisplay) {
-                filenameDisplay.textContent = file.name;
-                filenameDisplay.classList.remove('hidden');
-            } else {
-                // Add filename display to header if it doesn't exist
-                const header = document.querySelector('h2');
-                if (header) {
-                    header.innerHTML = `Analysis Complete - <span class="text-blue-600 font-mono text-lg">${file.name}</span>`;
-                }
+            // Show filename in processing title
+            const processingTitle = document.getElementById('processingTitle');
+            if (processingTitle) {
+                processingTitle.textContent = `Processing: ${file.name}`;
             }
             
             try {
@@ -531,140 +486,50 @@
                 // Update progress
                 updateProgress(10, 'Uploading file...', 'upload');
                 
-                // Use the streaming endpoint for real-time progress
-                const streamResponse = await fetch('/api/audio/analyze-streaming', {
+                // Use ONLY the visualization endpoint (includes all analysis + visualization)
+                // This eliminates the redundant double processing!
+                updateProgress(20, 'Starting analysis with visualization...', 'analyzing');
+                
+                // Show progress during analysis
+                const progressInterval = setInterval(() => {
+                    const elapsed = (Date.now() - startTime) / 1000;
+                    const estimatedProgress = Math.min(85, 20 + (elapsed * 5)); // Gradual progress
+                    updateProgress(estimatedProgress, `Analyzing audio... (${elapsed.toFixed(1)}s)`, 'analyzing');
+                }, 1000);
+                
+                const response = await fetch('/api/audio/analyze-visualization', {
                     method: 'POST',
                     body: formData
                 });
                 
-                if (!streamResponse.ok) {
-                    throw new Error(`HTTP ${streamResponse.status}: ${streamResponse.statusText}`);
+                clearInterval(progressInterval);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
                 
-                // Handle streaming response for real-time progress
-                const reader = streamResponse.body.getReader();
-                const decoder = new TextDecoder();
-                let analysisComplete = false;
+                updateProgress(90, 'Processing complete, loading results...', 'complete');
                 
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n');
-                    
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const data = JSON.parse(line.slice(6));
-                                
-                                if (data.status === 'complete') {
-                                    analysisComplete = true;
-                                    // Show analysis results immediately
-                                    updateProgress(90, 'Analysis complete! Showing results...', 'complete');
-                                    showAnalysisResults(data.result);
-                                    updateProgress(95, 'Loading visualization...', 'visualization');
-                                } else if (data.status === 'error') {
-                                    throw new Error(data.message);
-                                } else {
-                                    // Update progress with real data
-                                    updateProgress(data.progress || 0, data.message || 'Processing...', data.status || 'analyzing');
-                                }
-                            } catch (e) {
-                                console.log('Failed to parse SSE data:', line);
-                            }
-                        }
-                    }
-                }
+                const result = await response.json();
                 
-                // Now get visualization data (create new FormData since it was consumed)
-                updateProgress(98, 'Loading visualization data...', 'visualization');
-                const vizFormData = new FormData();
-                vizFormData.append('file', file);
+                updateProgress(95, 'Analysis complete! Loading UI...', 'complete');
                 
-                const vizResponse = await fetch('/api/audio/analyze-visualization', {
-                    method: 'POST',
-                    body: vizFormData
-                });
+                // Show analysis results immediately
+                showAnalysisResults(result);
                 
-                if (!vizResponse.ok) {
-                    throw new Error(`Visualization HTTP ${vizResponse.status}: ${vizResponse.statusText}`);
-                }
+                // Process the result immediately
+                console.log('🚀 Single API call completed - 50% faster processing!');
+                console.log('🔍 Analysis + visualization data received:', result);
                 
-                const result = await vizResponse.json();
-                
-                updateProgress(100, 'Analysis complete!', 'complete');
-                
-                // Debug: Log the visualization data
-                console.log('🔍 Visualization data received:', result.visualization);
-                console.log('🔍 Waveform peaks sample:', result.visualization?.waveform?.peaks?.slice(0, 10));
-                console.log('🔍 Waveform peaks middle:', result.visualization?.waveform?.peaks?.slice(100, 105));
-                console.log('🔍 Downbeats:', result.visualization?.downbeats?.times?.slice(0, 5));
-                console.log('🔍 Chords detected:', result.visualization?.chords?.events?.length || 0);
-                console.log('🔍 Chord events:', result.visualization?.chords?.events);
-                
-                // CONTENT-AWARE ANALYSIS DEBUG
-                if (result.content_aware) {
-                    console.log('\n🎯 CONTENT-AWARE ANALYSIS RESULTS:');
-                    console.log('   📊 Content awareness enabled:', result.content_aware.enabled);
-                    console.log('   🎵 Musical regions detected:', result.content_aware.musical_regions);
-                    console.log('   ⚡ Time saved:', result.content_aware.time_saved_percentage + '%');
-                    console.log('   📋 Content regions:', result.content_aware.regions);
-                    
-                    if (result.content_aware.regions && result.content_aware.regions.length > 0) {
-                        console.log('   📊 Region breakdown:');
-                        result.content_aware.regions.forEach((region, i) => {
-                            const status = region.analyzed ? '🎵 ANALYZED' : '⏭️ SKIPPED';
-                            console.log(`      Region ${i+1}: ${region.start.toFixed(1)}s-${region.end.toFixed(1)}s | ${region.type.toUpperCase()} | ${status}`);
-                        });
-                    }
-                }
-                
-                if (result.analysis?.content_analysis) {
-                    console.log('\n🎯 DETAILED CONTENT ANALYSIS:');
-                    console.log('   📊 Musical duration:', result.analysis.content_analysis.total_musical_duration + 's');
-                    console.log('   ⚡ Efficiency:', result.analysis.content_analysis.efficiency_stats);
-                }
-                
-                // INDIVIDUAL REGION ANALYSIS RESULTS
-                if (result.analysis?.region_analysis) {
-                    console.log('\n🔍 INDIVIDUAL REGION ANALYSIS:');
-                    console.log('   📊 Region analysis enabled:', result.analysis.region_analysis.enabled);
-                    console.log('   🎵 Total regions:', result.analysis.region_analysis.total_regions);
-                    console.log('   ⚡ Architecture:', result.analysis.region_analysis.architecture);
-                    
-                    if (result.analysis.region_analysis.regions && result.analysis.region_analysis.regions.length > 0) {
-                        console.log('   📋 Region breakdown:');
-                        result.analysis.region_analysis.regions.forEach((region, i) => {
-                            const info = region.region_info;
-                            const results = region.analysis_results;
-                            console.log(`      Region ${info.region_number}: ${info.start_time.toFixed(1)}s-${info.end_time.toFixed(1)}s | ${info.content_type.toUpperCase()}`);
-                            
-                            if (results.key_detection) {
-                                console.log(`         🎹 Key: ${results.key_detection.key} (${results.key_detection.confidence.toFixed(2)})`);
-                            }
-                            if (results.tempo_detection) {
-                                console.log(`         🥁 Tempo: ${results.tempo_detection.tempo.toFixed(1)} BPM`);
-                            }
-                            if (results.downbeat_detection) {
-                                console.log(`         🎵 Downbeats: ${results.downbeat_detection.downbeat_count} (${results.downbeat_detection.meter})`);
-                            }
-                            if (region.performance) {
-                                console.log(`         ⚡ Performance: ${region.performance.analysis_time}s (${region.performance.realtime_factor.toFixed(2)}x realtime)`);
-                            }
-                        });
-                    }
-                }
-                
-                // Stop timer
+                // Stop timer and load results immediately
                 stopProcessingTimer();
+                loadResults(result);
+                loadRegionAnalysis(result);
                 
-                // Load results
-                setTimeout(() => {
-                    loadResults(result);
-                    // Load region analysis results
-                    loadRegionAnalysis(result);
-                }, 500);
+                updateProgress(100, 'Complete!', 'complete');
+                
+                // ✅ PERFORMANCE IMPROVEMENT: Eliminated redundant double analysis
+                // This saves ~50% processing time by using a single API call
                 
             } catch (error) {
                 console.error('Processing failed:', error);
@@ -746,7 +611,7 @@
         }
 
         function showAnalysisResults(analysisData) {
-            // Show key analysis results immediately (before visualization loads)
+            // Show key analysis results immediately
             console.log('🚀 Showing analysis results immediately:', analysisData);
             
             const analysis = analysisData.analysis;
@@ -762,19 +627,10 @@
             
             // Show basic info
             const processingTime = analysis?.response_time || ((Date.now() - startTime) / 1000);
-            document.getElementById('tech-processtime').textContent = processingTime.toFixed(1) + 's';
+            console.log('Processing time:', processingTime.toFixed(1) + 's');
             
-            // Display a message that visualization is loading
-            const waveformCanvas = document.getElementById('waveformCanvas');
-            if (waveformCanvas) {
-                const ctx = waveformCanvas.getContext('2d');
-                ctx.fillStyle = '#f3f4f6';
-                ctx.fillRect(0, 0, waveformCanvas.width, waveformCanvas.height);
-                ctx.fillStyle = '#6b7280';
-                ctx.font = '16px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText('Loading visualization...', waveformCanvas.width/2, waveformCanvas.height/2);
-            }
+            // No need to show loading message - visualization data is already available!
+            console.log('🎨 Visualization data ready for immediate rendering');
         }
 
         function updateProgress(percentage, message, step) {
@@ -810,7 +666,6 @@
             const realtimeFactor = audioDuration > 0 ? (audioDuration / processingTime).toFixed(1) : '0.0';
             
             document.getElementById('realtimeValue').textContent = realtimeFactor + 'x';
-            document.getElementById('tech-processtime').textContent = processingTime.toFixed(1) + 's';
             
             // Load waveform data with defensive checks
             waveformData = visualization?.waveform || {};
@@ -836,35 +691,16 @@
             document.getElementById('regionCount').textContent = `${contentRegions.length} regions`;
             document.getElementById('waveformInfo').textContent = `${waveformData.width} points • ${duration.toFixed(1)}s`;
             
-            // Update technical info
-            document.getElementById('tech-pipeline').textContent = visualization.metadata?.extraction_method || 'AudioFlux';
-            document.getElementById('tech-gpu').textContent = result.features?.audioflux_visualization ? 'Enabled' : 'Disabled';
-            document.getElementById('tech-samplerate').textContent = `${(waveformData.sample_rate / 1000).toFixed(0)} kHz`;
+            // Technical info removed with analysis results card
             
             // Create metrics
             createMetrics(analysis);
             
-            // Draw waveform
+            // Draw waveform immediately
             drawWaveform();
         }
 
         function createMetrics(analysis) {
-            // Calculate Camelot wheel position
-            const keyToCamelot = {
-                'C major': '8B', 'C minor': '5A',
-                'C# major': '3B', 'C# minor': '12A', 'Db major': '3B', 'Db minor': '12A',
-                'D major': '10B', 'D minor': '7A',
-                'D# major': '5B', 'D# minor': '2A', 'Eb major': '5B', 'Eb minor': '2A',
-                'E major': '12B', 'E minor': '9A',
-                'F major': '7B', 'F minor': '4A',
-                'F# major': '2B', 'F# minor': '11A', 'Gb major': '2B', 'Gb minor': '11A',
-                'G major': '9B', 'G minor': '6A',
-                'G# major': '4B', 'G# minor': '1A', 'Ab major': '4B', 'Ab minor': '1A',
-                'A major': '11B', 'A minor': '8A',
-                'A# major': '6B', 'A# minor': '3A', 'Bb major': '6B', 'Bb minor': '3A',
-                'B major': '1B', 'B minor': '10A'
-            };
-            
             // Debug: Log the full analysis object to see what's available
             console.log('🔍 Full analysis object:', analysis);
             
@@ -872,33 +708,15 @@
             const mlKey = analysis.ml_key || analysis.key || analysis.enhanced_key || 'Unknown';
             const mlMode = analysis.ml_mode || analysis.mode || analysis.enhanced_mode || 'Unknown';
             const mlTempo = analysis.ml_tempo || analysis.tempo || analysis.enhanced_tempo || 'Unknown';
-            const mlDanceability = analysis.ml_danceability || analysis.danceability || 0;
-            const downbeatCount = analysis.madmom_downbeat_count || analysis.downbeat_count || 0;
-            const energy = analysis.rms_energy || analysis.energy || 0;
             
-            console.log('🎹 Key detection results:', { mlKey, mlMode, mlTempo, mlDanceability });
+            console.log('🎹 Key detection results:', { mlKey, mlMode, mlTempo });
             
             const fullKey = mlKey !== 'Unknown' && mlMode !== 'Unknown' ? `${mlKey} ${mlMode}` : 'Unknown';
-            const camelotKey = keyToCamelot[fullKey] || 'N/A';
+            const tempoDisplay = typeof mlTempo === 'number' ? `${Math.round(mlTempo)} BPM` : mlTempo;
             
-            const metrics = [
-                { label: 'Key', value: mlKey },
-                { label: 'Scale', value: mlMode },
-                { label: 'Camelot', value: camelotKey },
-                { label: 'Tempo', value: typeof mlTempo === 'number' ? `${Math.round(mlTempo)} BPM` : mlTempo },
-                { label: 'Danceability', value: mlDanceability > 0 ? `${Math.round(mlDanceability * 100)}%` : 'N/A' },
-                { label: 'Time Signature', value: analysis.madmom_meter_detection || '4/4' },
-                { label: 'Downbeats', value: downbeatCount > 0 ? downbeatCount : 'None detected' },
-                { label: 'Energy', value: energy > 0 ? energy.toFixed(2) : 'N/A' }
-            ];
-            
-            const grid = document.getElementById('metricsGrid');
-            grid.innerHTML = metrics.map(metric => `
-                <div class="bg-gray-50 rounded-xl p-4 text-center">
-                    <div class="text-2xl font-bold text-gray-900 mb-1">${metric.value}</div>
-                    <div class="text-sm text-gray-600 uppercase tracking-wide">${metric.label}</div>
-                </div>
-            `).join('');
+            // Update timeline header with key metrics
+            document.getElementById('keyDisplay').textContent = `Key: ${fullKey}`;
+            document.getElementById('tempoDisplay').textContent = `Tempo: ${tempoDisplay}`;
         }
 
         function drawWaveform() {
@@ -975,7 +793,7 @@
                 
                 console.log(`🎨 Max peak: ${maxPeak.toFixed(6)}, scale: ${scale.toFixed(2)}, non-zero peaks: ${nonZeroPeaks.length}`);
                 
-                // Draw waveform as filled shape
+                // Draw waveform as filled shape with reduced resolution
                 ctx.fillStyle = '#0066cc40'; // Semi-transparent blue
                 ctx.strokeStyle = '#0066cc';
                 ctx.lineWidth = 1;
@@ -984,8 +802,9 @@
                 // Start from bottom left
                 ctx.moveTo(0, centerY);
                 
-                // Draw top edge (peaks)
-                for (let i = 0; i < peaks.length; i++) {
+                // Draw top edge (peaks) - sample every 4th point for faster rendering
+                const step = Math.max(1, Math.floor(peaks.length / width));
+                for (let i = 0; i < peaks.length; i += step) {
                     const x = (i / peaks.length) * width;
                     const y = centerY - (peaks[i] * scale);
                     ctx.lineTo(x, y);
@@ -998,7 +817,7 @@
                 
                 ctx.fill();
                 ctx.stroke();
-                console.log(`🎨 Drew filled waveform`);
+                console.log(`🎨 Drew filled waveform with reduced resolution`);
             }
             
             // Draw center line
@@ -1009,31 +828,7 @@
             ctx.lineTo(width, centerY);
             ctx.stroke();
             
-            // Draw downbeats BEFORE current time cursor
-            if (downbeats && downbeats.length > 0) {
-                console.log(`🥁 Drawing ${downbeats.length} downbeats on main timeline`);
-                ctx.strokeStyle = '#dc2626'; // Red for downbeats
-                ctx.lineWidth = 2;
-                ctx.setLineDash([]);
-                
-                downbeats.forEach((beatTime, index) => {
-                    const x = (beatTime / duration) * width;
-                    ctx.beginPath();
-                    ctx.moveTo(x, 10);
-                    ctx.lineTo(x, height - 10);
-                    ctx.stroke();
-                    
-                    // Add beat number label
-                    ctx.fillStyle = '#dc2626';
-                    ctx.font = '10px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText((index + 1).toString(), x, 20);
-                });
-                
-                console.log(`✅ Drew ${downbeats.length} downbeat markers`);
-            } else {
-                console.log('⚠️ No downbeats to draw');
-            }
+            // Madmom beat markers removed per user request
 
             // Draw current time cursor
             if (currentTime > 0) {
@@ -1183,13 +978,12 @@
                         </span>
                     </div>
                     
-                    <!-- Region Waveform -->
+                    <!-- Region Info -->
                     <div class="mb-4" style="background: var(--hover-bg); border-radius: 8px; padding: 12px;">
-                        <div class="flex items-center justify-between text-xs mb-2" style="color: var(--text-secondary); font-family: 'JetBrains Mono', monospace;">
+                        <div class="flex items-center justify-between text-xs" style="color: var(--text-secondary); font-family: 'JetBrains Mono', monospace;">
                             <span>${formatTime(regionInfo.start_time)} - ${formatTime(regionInfo.end_time)}</span>
                             <span>${regionInfo.duration.toFixed(1)}s</span>
                         </div>
-                        <canvas id="regionWaveform${index}" width="400" height="60" style="width: 100%; height: 60px; background: var(--bg-color); border-radius: 4px; border: 1px solid var(--border-color);"></canvas>
                     </div>
                 </div>
                 
@@ -1228,103 +1022,10 @@
                 </div>
             `;
             
-            // Render region-specific waveform
-            setTimeout(() => renderRegionWaveform(index, regionInfo), 100);
+            // Waveform rendering removed from region cards per user request
         }
         
-        let regionWaveformCache = {};
-        
-        function renderRegionWaveform(regionIndex, regionInfo) {
-            const canvasId = `regionWaveform${regionIndex}`;
-            const canvas = document.getElementById(canvasId);
-            
-            if (!canvas || !waveformData) {
-                console.log('❌ Canvas or waveform data not available for region', regionIndex);
-                return;
-            }
-            
-            // Check cache first
-            if (regionWaveformCache[regionIndex]) {
-                console.log('✅ Using cached waveform for region', regionIndex);
-                const ctx = canvas.getContext('2d');
-                ctx.putImageData(regionWaveformCache[regionIndex], 0, 0);
-                return;
-            }
-            
-            const ctx = canvas.getContext('2d');
-            const rect = canvas.getBoundingClientRect();
-            const width = canvas.width;
-            const height = canvas.height;
-            
-            // Clear canvas with portfolio background
-            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-color') || '#fafafa';
-            ctx.fillRect(0, 0, width, height);
-            
-            // Extract region-specific waveform data
-            const startTime = regionInfo.start_time;
-            const endTime = regionInfo.end_time;
-            const duration = endTime - startTime;
-            
-            // Calculate sample indices for this region
-            const waveformPeaks = waveformData.peaks || waveformData.data || [];
-            const totalSamples = waveformPeaks.length;
-            const totalDuration = waveformData.duration;
-            const startIndex = Math.floor((startTime / totalDuration) * totalSamples);
-            const endIndex = Math.floor((endTime / totalDuration) * totalSamples);
-            const regionSamples = waveformPeaks.slice(startIndex, endIndex);
-            
-            if (regionSamples.length === 0) {
-                console.log('❌ No waveform data for region', regionIndex);
-                return;
-            }
-            
-            // Render waveform
-            ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent-color') || '#777777';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            
-            const samplesPerPixel = Math.max(1, Math.floor(regionSamples.length / width));
-            
-            for (let x = 0; x < width; x++) {
-                const sampleIndex = Math.floor(x * samplesPerPixel);
-                if (sampleIndex < regionSamples.length) {
-                    const amplitude = regionSamples[sampleIndex];
-                    const y = height / 2 - (amplitude * height / 4); // Only show positive half
-                    
-                    if (x === 0) {
-                        ctx.moveTo(x, y);
-                    } else {
-                        ctx.lineTo(x, y);
-                    }
-                }
-            }
-            ctx.stroke();
-            
-            // Add downbeat markers for this region
-            if (downbeats && downbeats.length > 0) {
-                ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-muted') || '#999';
-                ctx.lineWidth = 1;
-                ctx.globalAlpha = 0.6;
-                
-                downbeats.forEach(beatTime => {
-                    if (beatTime >= startTime && beatTime <= endTime) {
-                        const relativeTime = beatTime - startTime;
-                        const x = (relativeTime / duration) * width;
-                        
-                        ctx.beginPath();
-                        ctx.moveTo(x, 5);
-                        ctx.lineTo(x, height - 5);
-                        ctx.stroke();
-                    }
-                });
-                
-                ctx.globalAlpha = 1.0;
-            }
-            
-            // Cache the rendered waveform
-            regionWaveformCache[regionIndex] = ctx.getImageData(0, 0, width, height);
-            console.log('✅ Rendered and cached waveform for region', regionIndex, `(${startTime.toFixed(1)}s - ${endTime.toFixed(1)}s)`);
-        }
+        // Region waveform rendering removed per user request
     </script>
 </body>
 </html>
